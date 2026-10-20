@@ -1,0 +1,17 @@
+services:
+  voc:
+    build: .
+    container_name: voc
+    restart: always
+    environment:
+      VOC_WEB_AUTH: "1"
+      # 从宿主机 .env 读取（deploy.sh 会写入），不要写进仓库
+      VOC_DEEPSEEK_API_KEY: "${VOC_DEEPSEEK_API_KEY}"
+    volumes:
+      - voc_data:/data
+    # 端口只绑在回环地址：外部只走 Cloudflare 隧道，源站不直接暴露
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  voc_data:

@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflare Tunnel for VOC
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# 隧道名需与 cloudflared tunnel create 时一致（默认示例为 vocvps）
+ExecStart=/usr/local/bin/cloudflared tunnel run vocvps
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
