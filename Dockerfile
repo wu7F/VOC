@@ -8,9 +8,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# 先装依赖（利用层缓存）
+# 先装依赖（利用层缓存）；默认走阿里云 PyPI 镜像，国内构建快
+ARG PIP_INDEX=https://mirrors.aliyun.com/pypi/simple/
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i "$PIP_INDEX" -r requirements.txt
 
 # 再拷代码（用 .dockerignore 排除无关目录）
 COPY . .

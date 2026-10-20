@@ -9,11 +9,15 @@
 
 - 阿里云 → **轻量应用服务器**
 - 地域：选离用户近的（华东1 杭州 / 华南1 深圳 / 华北2 北京）
-- 镜像：**Ubuntu 22.04 / 24.04**
-- 规格：入门 **2C2G** 足够（分析任务吃 CPU，2G 内存够跑轻量注释）
-- 带宽：3–5 Mbps 固定即可（流量走 Cloudflare，源站带宽压力很小）
+- 镜像：**Ubuntu 22.04 / 24.04**（首选）
+  - Alibaba Cloud Linux 3 / CentOS 也能跑（脚本已兼容 dnf/yum），但对本项目的资料最多、踩坑最少的是 Ubuntu
+- 规格：**2C2G** 最稳；**2C1G 也能跑**（本项目零依赖、内存占用约 100–200MB），
+  脚本会自动补 2GB swap 防止构建镜像时 OOM
+- 带宽：3–5 Mbps 固定最便宜；「200Mbps 峰值 + 不限流量」那类套餐也能用，
+  但对本项目（纯文本分析与少量上传）属于买多了
 
-> 入门档月费约 ¥50–80/年（活动价更低），比 Render 便宜且国内更快。
+> 价格参考：常规价 2C1G/30G ≈ ¥40/月（年付有折扣）；新用户特惠档 2C2G 常能看到 ¥68–99/首年。
+> 先看「特惠/新人」入口，再决定档位；**年付比月付划算很多**。
 
 ---
 
@@ -32,6 +36,21 @@ git clone https://github.com/wu7F/VOC.git && cd VOC && bash deploy.sh
 ```
 
 脚本会交互式问你：DeepSeek 密钥、管理员邮箱、管理员密码。
+
+脚本已处理这些国内常见坑：
+- `curl | bash` 下的交互输入（显式读 `/dev/tty`，否则会把脚本内容当输入）
+- 1GB 小内存自动建 2GB swap（防 `docker build` 被 OOM kill）
+- Docker Hub 拉不动时自动切国内镜像加速源（`docker.m.daocloud.io` 等）
+- pip 走阿里云 PyPI 镜像（`Dockerfile` 里默认已配）
+- Ubuntu 走 apt、Alibaba Cloud Linux / CentOS 走 dnf + 阿里云 docker-ce 源
+
+若 `git clone` 在服务器上失败（国内访问 GitHub 偶发 reset），两种走法：
+```bash
+# 1) 本机打包上传（最稳）
+scp -r voc-platform root@<服务器公网IP>:/root/VOC
+# 2) 或在服务器上给 git 配代理后重试
+git config --global http.proxy http://127.0.0.1:7897
+```
 
 ---
 
