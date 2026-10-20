@@ -210,3 +210,79 @@ nameserver 即可。⚠️ 不要买"首年 $1、续费 $23"那种促销型，�
 
 **Q：数据会不会因为重启丢？**
 不会。产出都写在 `VOCData/runs/`，重启服务只是重新读取索引。
+
+---
+
+## 八、方案 5：GitHub + 云端常驻（关机也不影响别人用）
+
+> 目标：**这台电脑关了，网站照样 7×24 运行**，其他人照常用。
+> 本质是把后端搬到一台永不关机的云机器，再把 `voc.你的域名.com` 指向它。
+
+### 适用前提
+
+- 代码推到 GitHub（仓库已就绪：`.gitignore` 已排除 `llm_config.json` / `VOCData` 等密钥与数据，**可放心公开**）
+- 选一个 GitHub 关联的海外 PaaS（数据可放境外，已确认）：**Render / Railway / Fly.io**
+
+### 已备好的部署物料（项目根目录）
+
+| 文件 | 作用 |
+|---|---|
+| `requirements.txt` | 锁定的依赖（fastapi/uvicorn/pandas/openpyxl/gunicorn 等） |
+| `Procfile` | `gunicorn ... --bind 0.0.0.0:$PORT`（Heroku 风格，Render/Railway 通用） |
+| `render.yaml` | Render 原生配置：含 1GB 持久盘 `/data`、环境变量占位 |
+| `Dockerfile` | Fly.io / 任意 Docker 平台；含无头 Chromium（PDF 导出） |
+| `.dockerignore` | 同 `.gitignore`，避免把密钥打进镜像 |
+| `llm_config.example.json` | LLM 配置脱敏模板（真实密钥走环境变量，不入库） |
+| `web/serve.py` | 已支持 `$PORT` 环境变量 |
+
+### 步骤
+
+**① 推到 GitHub**
+
+```bash
+# 在 GitHub 新建一个空仓库（不要勾 README），拿到地址后：
+git remote add origin https://github.com/<你>/<仓库>.git
+git branch -M main
+git push -u origin main
+```
+
+**② 部署到 Render（最省事，GitHub 一键关联）**
+
+1. 打开 https://render.com → Sign in with GitHub → 授权
+2. New → Web Service → 选刚推的仓库
+3. Render 会读 `render.yaml`；在面板里补三个环境变量（从你本机 `llm_config.json` 抄，**别提交到仓库**）：
+   - `LLM_CONNECTOR_BASE_URL` = `base_url`
+   - `LLM_CONNECTOR_API_KEY`  = `api_key`
+   - `LLM_CONNECTOR_MODEL`    = `model`
+4. 确认磁盘 `vocdata` 已挂到 `/data`（`VOC_DATA_DIR` 已设成 `/data`）
+5. Deploy → 拿到 `https://voc-insight.onrender.com`
+
+> ⚠️ Render 免费版**闲置会休眠**，首次访问约慢 30–60 秒；要常驻选 Starter 及以上，或改用 Railway（$5 额度、不休眠）。
+> PDF 导出在免费版需另外装 Chromium；主流程不受影响。
+
+**③ 把账号迁到云端**（云端 `/data` 是空的，需重建）
+
+Render 控制台 → 你的服务 → Shell，执行：
+
+```bash
+python manage_accounts.py add 3049044540@qq.com
+# 按提示输入密码 1330527
+```
+
+**④ 切换域名到云端（关键一步，关本机前做）**
+
+Cloudflare 控制台 → DNS：
+- 把 `voc` 这条 **CNAME 的目标**从「隧道」改成 `voc-insight.onrender.com`
+- 代理状态（橙色云）保持 **开**
+
+改完后：本机 `cloudflared` 可以关了，`voc.你的域名.com` 直接走云端，这台电脑关机无影响。
+
+### 想保留历史报告？
+
+本机 `C:/VOCData/runs`（约 57MB）在云端是空的。要么：
+- 接受"云端从零开始"，历史报告留在这台电脑以后再说；
+- 或把 `C:/VOCData/runs` 打包上传到云端磁盘（Render Shell 里用 `curl`/base64 等方式灌入 `/data/runs`）。
+
+### 回滚
+
+DNS 把 CNAME 目标改回隧道、重启本机 `cloudflared` 即可回到"本机托管"模式。
