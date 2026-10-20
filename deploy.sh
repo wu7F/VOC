@@ -71,13 +71,19 @@ else
       curl -fsSL https://get.docker.com | $SUDO sh -s -- --mirror Aliyun
       ;;
     dnf|yum)
-      # Alibaba Cloud Linux 3 / CentOS Stream / RHEL 8+：用阿里云 docker-ce 源
-      $SUDO $PKG install -y yum-utils >/dev/null 2>&1 || true
+      # Alibaba Cloud Linux 3 / CentOS Stream / RHEL 8+：固定用 centos/8 的 docker-ce 源
+      # 注意：ALinux3 的 $releasever 会被解析成 "3"，直接套 centos 模板会 404，
+      # 因此这里直接写死 centos/8 的 baseurl，避免依赖发行版变量。
       $SUDO $PKG install -y dnf-plugins-core >/dev/null 2>&1 || true
-      if [ ! -f /etc/yum.repos.d/docker-ce.repo ]; then
-        $SUDO $PKG config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
-      fi
-      $SUDO sed -i 's+download.docker.com+mirrors.aliyun.com/docker-ce+' /etc/yum.repos.d/docker-ce.repo 2>/dev/null || true
+      $SUDO tee /etc/yum.repos.d/docker-ce.repo >/dev/null <<'EOF'
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/8/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+EOF
+      $SUDO rpm --import https://mirrors.aliyun.com/docker-ce/linux/centos/gpg 2>/dev/null || true
       $SUDO $PKG install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
       $SUDO systemctl enable --now docker
       ;;
@@ -105,10 +111,15 @@ fi
 echo "[3/6] 获取代码..."
 if [ ! -d "$DIR/.git" ]; then
   if ! git clone "$REPO" "$DIR"; then
-    echo "!! git clone 失败（国内访问 GitHub 常见）。可选方案："
-    echo "   1) 本机打包上传：本地执行  scp -r voc-platform root@<公网IP>:/root/VOC"
-    echo "   2) 或在服务器上配置代理后重试  git config --global http.proxy http://127.0.0.1:7897"
-    exit 1
+    echo "      直接 clone 失败，尝试国内镜像 ghfast.top ..."
+    if git clone "https://ghfast.top/https://github.com/wu7F/VOC.git" "$DIR"; then
+      echo "      ✅ 已通过镜像拉取成功"
+    else
+      echo "!! git clone 失败（国内访问 GitHub 常见）。可选方案："
+      echo "   1) 本机打包上传：本地执行  scp -r voc-platform root@<公网IP>:/root/VOC"
+      echo "   2) 或在服务器上配置代理后重试  git config --global http.proxy http://127.0.0.1:7897"
+      exit 1
+    fi
   fi
 else
   echo "      目录已存在，尝试更新..."
