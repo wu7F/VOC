@@ -115,9 +115,98 @@
     transition: opacity .2s; pointer-events: none; z-index: 90; max-width: 420px;
   }
   .toast.on { opacity: .94; }
+
+  /* ---- 启动遮罩（防闪屏）---- */
+  #bootScreen {
+    display: none; position: fixed; inset: 0; z-index: 200; background: var(--bg);
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+  }
+  body.booting #bootScreen { display: flex; }
+  body.booting header, body.booting main, body.booting #mask { visibility: hidden; }
+  .boot-title { font-size: 18px; font-weight: 600; color: var(--fg); }
+  .boot-sub { font-size: 12px; color: var(--fg3); }
+  .boot-bar { width: 160px; height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .boot-bar > i {
+    display: block; height: 100%; width: 40%; background: var(--accent); border-radius: 4px;
+    animation: bootmove 1.1s ease-in-out infinite;
+  }
+  @keyframes bootmove { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+
+  /* ---- 登录（分屏深色）---- */
+  .login-screen { display: none; position: fixed; inset: 0; z-index: 150; background: var(--bg); }
+  .login-screen.on { display: flex; }
+  .login-hero {
+    flex: 1; background: #16302a; color: #eaf3ef; padding: 54px 48px;
+    display: flex; flex-direction: column; justify-content: center; gap: 18px;
+  }
+  .lh-brand { font-size: 26px; font-weight: 600; letter-spacing: .5px; }
+  .lh-tag { font-size: 14px; color: #a9ccc0; max-width: 360px; line-height: 1.7; }
+  .lh-feats { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: #cfe3db; }
+  .lh-feats li:before { content: "\2713"; color: #5fcf9a; margin-right: 8px; font-weight: 700; }
+  .login-panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px; }
+  .lf-card { width: 100%; max-width: 360px; }
+  .lf-card h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+  .lf-sub { margin: 0 0 22px; font-size: 12px; color: var(--fg3); }
+  .lf-card label { margin-top: 14px; }
+  .lf-pw { position: relative; }
+  .lf-pw input { padding-right: 64px; }
+  .lf-toggle {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    border: none; background: transparent; color: var(--fg2); font-size: 12px;
+    cursor: pointer; padding: 6px 8px; border-radius: 6px;
+  }
+  .lf-toggle:hover { background: var(--bg); }
+  .lf-remember { display: flex; align-items: center; gap: 6px; margin-top: 16px; font-size: 12px; color: var(--fg2); cursor: pointer; }
+  .lf-remember input { width: auto; }
+  .lf-err { display: none; margin-top: 16px; padding: 10px 12px; border-radius: 8px; font-size: 13px; border: 1px solid transparent; }
+  .lf-err.err { background: var(--err-soft); color: var(--err); border-color: #efc8c5; }
+  .lf-err.lock { background: var(--warn-soft); color: var(--warn); border-color: #edd9a8; }
+  .lf-err.info { background: var(--info-soft); color: var(--info); border-color: #c3d8ec; }
+  .lf-btn { width: 100%; margin-top: 20px; padding: 11px; font-size: 14px; }
+  .lf-shake { animation: lshake .4s; }
+  @keyframes lshake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); } 40% { transform: translateX(8px); }
+    60% { transform: translateX(-5px); } 80% { transform: translateX(5px); }
+  }
+  @media (max-width: 720px) { .login-hero { display: none; } .login-panel { padding: 20px; } }
 </style>
 </head>
-<body>
+<body class="booting">
+
+<div id="bootScreen">
+  <div class="boot-title">VOC 洞察平台</div>
+  <div class="boot-sub">正在加载…</div>
+  <div class="boot-bar"><i></i></div>
+</div>
+
+<div id="loginScreen" class="login-screen">
+  <div class="login-hero">
+    <div class="lh-brand">VOC 洞察平台</div>
+    <div class="lh-tag">上传导出文件 → 自动跑完七步 → 看板与洞察报告</div>
+    <ul class="lh-feats">
+      <li>多源评论：Reddit / Amazon / Wayfair …</li>
+      <li>七步内核：清洗 → 标签 → 看板</li>
+      <li>账号登录，数据安全隔离</li>
+    </ul>
+  </div>
+  <div class="login-panel">
+    <form id="loginForm" class="lf-card" onsubmit="return false;">
+      <h2>登录</h2>
+      <p class="lf-sub">账号由平台管理员统一创建，没有自助注册</p>
+      <label>邮箱</label>
+      <input type="email" id="loginEmail" autocomplete="username" placeholder="you@example.com">
+      <label>密码</label>
+      <div class="lf-pw">
+        <input type="password" id="loginPw" autocomplete="current-password">
+        <button type="button" id="loginPwToggle" class="lf-toggle">显示</button>
+      </div>
+      <label class="lf-remember"><input type="checkbox" id="loginRemember"> 记住邮箱与密码（仅本机浏览器）</label>
+      <div id="loginErr" class="lf-err"></div>
+      <button type="button" id="loginBtn" class="primary lf-btn">登录</button>
+    </form>
+  </div>
+</div>
 
 <header>
   <h1>VOC 洞察平台</h1>
@@ -127,24 +216,6 @@
   <span id="loginArea" style="display:none"></span>
   <code id="envInfo">—</code>
 </header>
-
-<!-- 登录：只有服务端 auth_enabled 时才显示 -->
-<section class="card" id="loginCard" style="display:none">
-  <h2>登录 <span class="hint">本实例启用了认证 —— 未登录时看不到任何任务</span></h2>
-  <div class="row">
-    <div style="min-width:170px;flex:1">
-      <label>用户名</label>
-      <input type="text" id="l_user" autocomplete="username">
-    </div>
-    <div style="min-width:170px;flex:1">
-      <label>口令</label>
-      <input type="password" id="l_pass" autocomplete="current-password">
-    </div>
-    <div style="align-self:flex-end">
-      <button class="primary" id="l_go">登录</button>
-    </div>
-  </div>
-</section>
 
 <main>
   <section class="card">
@@ -269,49 +340,193 @@ fetch('/api/meta').then(function (r) { return r.json(); }).then(function (m) {
   el('envInfo').textContent = m.runs_dir;
   el('modeInfo').textContent = 'worker:' + (m.worker_mode || '?')
     + ' · 存储:' + ((m.storage && m.storage.scheme) || '?');
-  applyMe(m.me);
+  boot();
 });
 
-/* ---- 登录 ---- */
-function applyMe(me) {
-  var need = !!META.auth_enabled && !me;
-  el('loginCard').style.display = need ? '' : 'none';
-  el('loginArea').style.display = (META.auth_enabled || me) ? '' : 'none';
-  if (me) {
-    el('loginArea').innerHTML = '<span class="tag s-done">' + esc(me.username)
-      + ' <span class="muted">' + esc(me.role) + '</span></span> '
-      + '<button class="mini" onclick="doLogout()">退出</button>';
-  } else if (META.auth_enabled) {
-    el('loginArea').innerHTML = '<span class="tag s-err">未登录</span>';
+/* ---- 登录（美化版） ---- */
+var REMEMBER_KEY = 'voc_remember_creds';
+function _b64e(s) { try { return btoa(unescape(encodeURIComponent(s))); } catch (e) { return ''; } }
+function _b64d(s) { try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ''; } }
+function saveRemember(email, pw) { try { localStorage.setItem(REMEMBER_KEY, _b64e(email + ' ' + pw)); } catch (e) {} }
+function clearRemember() { try { localStorage.removeItem(REMEMBER_KEY); } catch (e) {} }
+function loadRemember() {
+  try {
+    var s = localStorage.getItem(REMEMBER_KEY);
+    if (!s) return null;
+    var p = _b64d(s).split(' ');
+    return { email: p[0] || '', pw: p[1] || '' };
+  } catch (e) { return null; }
+}
+function prefillRemembered() {
+  var r = loadRemember();
+  if (r) {
+    el('loginEmail').value = r.email;
+    el('loginPw').value = r.pw;
+    el('loginRemember').checked = true;
+  }
+}
+
+var _lockTimer = null;
+function stopLockCountdown() { if (_lockTimer) { clearInterval(_lockTimer); _lockTimer = null; } }
+function startLockCountdown(remain) {
+  stopLockCountdown();
+  var box = el('loginErr');
+  _lockTimer = setInterval(function () {
+    remain -= 1;
+    if (remain <= 0) {
+      stopLockCountdown();
+      el('loginBtn').disabled = false;
+      box.style.display = 'none';
+      return;
+    }
+    box.textContent = '尝试次数过多，请 ' + remain + ' 秒后再试';
+  }, 1000);
+}
+function setLoginError(type, msg, extra) {
+  var box = el('loginErr');
+  box.className = 'lf-err ' + type;
+  box.textContent = msg;
+  box.style.display = '';
+  if (type === 'lock' && extra && extra.retry_after) {
+    el('loginBtn').disabled = true;
+    startLockCountdown(extra.retry_after);
+  }
+}
+function clearLoginError() {
+  stopLockCountdown();
+  var box = el('loginErr');
+  box.style.display = 'none';
+  box.textContent = '';
+  box.className = 'lf-err';
+  el('loginBtn').disabled = false;
+}
+function loginShake() {
+  var c = el('loginForm');
+  c.classList.remove('lf-shake');
+  void c.offsetWidth;
+  c.classList.add('lf-shake');
+}
+function parseLoginError(j) {
+  var d = (j && j.detail) || {};
+  return { msg: d.msg || '登录失败', remaining: (typeof d.remaining === 'number' ? d.remaining : null), retry_after: d.retry_after || null };
+}
+function handleLoginError(j) {
+  var d = parseLoginError(j);
+  if (d.retry_after) {
+    setLoginError('lock', d.msg, { retry_after: d.retry_after });
+  } else if (d.remaining !== null) {
+    loginShake();
+    var tail = d.remaining > 0 ? '（还可尝试 ' + d.remaining + ' 次）' : '';
+    setLoginError('err', d.msg + tail);
+    el('loginPw').value = '';
+    el('loginPw').focus();
+  } else {
+    loginShake();
+    setLoginError('err', d.msg);
   }
 }
 function doLogin() {
+  clearLoginError();
+  var email = el('loginEmail').value.trim();
+  var pw = el('loginPw').value;
+  if (!email || !pw) { setLoginError('err', '请输入邮箱和密码'); return; }
+  el('loginBtn').disabled = true;
+  el('loginBtn').textContent = '登录中…';
   var fd = new FormData();
-  fd.append('username', el('l_user').value);
-  fd.append('password', el('l_pass').value);
+  fd.append('username', email);
+  fd.append('password', pw);
   fetch('/api/login', { method: 'POST', body: fd })
     .then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); })
     .then(function (p) {
-      if (!p[0]) { toast('登录失败：' + (p[1].detail || '未知原因')); return; }
-      el('l_pass').value = '';
-      toast('已登录：' + p[1].username);
-      applyMe({ username: p[1].username, role: '' });
-      poll();
+      el('loginBtn').disabled = false;
+      el('loginBtn').textContent = '登录';
+      if (p[0]) {
+        if (el('loginRemember').checked) saveRemember(email, pw); else clearRemember();
+        onLoggedIn(p[1].username);
+        return;
+      }
+      handleLoginError(p[1]);
     })
-    .catch(function (e) { toast('登录出错：' + e); });
+    .catch(function (e) {
+      el('loginBtn').disabled = false;
+      el('loginBtn').textContent = '登录';
+      setLoginError('err', '登录出错：' + e);
+    });
+}
+function onLoggedIn(username) {
+  el('loginScreen').classList.remove('on');
+  clearLoginError();
+  updateLoginArea({ username: username, role: '' });
+  toast('已登录：' + username);
+  poll();
+}
+function updateLoginArea(me) {
+  var area = el('loginArea');
+  if (me) {
+    area.style.display = '';
+    area.innerHTML = '<span class="tag s-done">' + esc(me.username)
+      + ' <span class="muted">' + esc(me.role || '') + '</span></span> '
+      + '<button class="mini" onclick="doLogout()">退出</button>';
+  } else {
+    area.style.display = META.auth_enabled ? '' : 'none';
+    area.innerHTML = META.auth_enabled ? '<span class="tag s-err">未登录</span>' : '';
+  }
+}
+function showLogin() {
+  clearLoginError();
+  el('loginScreen').classList.add('on');
+  updateLoginArea(null);
+}
+function forceLogin() {
+  el('loginScreen').classList.add('on');
+  updateLoginArea(null);
+}
+function startApp() {
+  if (!window._pollTimer) {
+    poll();
+    window._pollTimer = setInterval(poll, 3000);
+  }
+}
+function boot() {
+  var need = !!META.auth_enabled;
+  if (!need) {
+    document.body.classList.remove('booting');
+    updateLoginArea(null);
+    startApp();
+    return;
+  }
+  fetch('/api/me').then(function (r) { return r.json(); }).then(function (d) {
+    document.body.classList.remove('booting');
+    if (d.user) { updateLoginArea(d.user); startApp(); }
+    else { showLogin(); prefillRemembered(); }
+  }).catch(function () {
+    document.body.classList.remove('booting');
+    showLogin();
+    prefillRemembered();
+  });
 }
 function doLogout() {
   fetch('/api/logout', { method: 'POST' })
-    .then(function () { applyMe(null); poll(); });
+    .then(function () { forceLogin(); poll(); });
 }
-el('l_go').addEventListener('click', doLogin);
-el('l_pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
 
-/** 统一处理 401：跳回登录面板，别让用户对着空列表发呆。 */
+el('loginBtn').addEventListener('click', doLogin);
+el('loginPw').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+el('loginEmail').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+el('loginPwToggle').addEventListener('click', function () {
+  var inp = el('loginPw');
+  var shown = inp.type === 'text';
+  inp.type = shown ? 'password' : 'text';
+  el('loginPwToggle').textContent = shown ? '显示' : '隐藏';
+});
+
+/** 统一处理 401：会话失效就弹回登录页，别让用户对着空列表发呆。 */
 function guard401(res) {
   if (res.status === 401) {
-    applyMe(null);
-    toast('登录已失效或没有权限，请重新登录');
+    if (!el('loginScreen').classList.contains('on')) {
+      toast('登录已失效或没有权限，请重新登录');
+    }
+    forceLogin();
     return true;
   }
   return false;
@@ -476,8 +691,8 @@ function closeModal() {
 el('mask').addEventListener('click', function (e) { if (e.target === el('mask')) closeModal(); });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-poll();
-setInterval(poll, 3000);
+// 初始轮询交给 boot() 在判定登录态后再启动，避免未登录时反复打 401
+
 </script>
 </body>
 </html>

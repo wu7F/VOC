@@ -407,17 +407,82 @@ def meta(request: Request) -> dict[str, Any]:
 # ==========================================================================
 
 
+# --- 登录限流：防爆破，公网部署必需 ----------------------------------------
+#: 失败计数与锁定都落在内存里（单实例足够；多实例可换 Redis）。
+_LOGIN_FAIL: dict[str, list[float]] = {}
+_LOGIN_LOCK: dict[str, float] = {}
+_LOGIN_MAX = 8          # 失败达到此数触发锁定
+_LOGIN_WINDOW = 300.0   # 失败计数窗口（秒）
+_LOGIN_LOCK_S = 300     # 锁定时长（秒）
+
+
+def _client_ip(request: Request) -> str:
+    """取真实客户端 IP：优先 X-Forwarded-For（Cloudflare / Render 反代会带）。"""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _login_state(host: str) -> dict:
+    """返回当前限流态：锁定中 {locked,retry_after} 或 {locked:False,remaining}。"""
+    now = time.time()
+    unlock = _LOGIN_LOCK.get(host, 0.0)
+    if unlock > now:
+        return {"locked": True, "retry_after": int(unlock - now) + 1}
+    fails = [t for t in _LOGIN_FAIL.get(host, []) if now - t < _LOGIN_WINDOW]
+    _LOGIN_FAIL[host] = fails
+    return {"locked": False, "remaining": max(0, _LOGIN_MAX - len(fails))}
+
+
+def _login_note_fail(host: str) -> dict:
+    """记一次失败，返回更新后的限流态（可能进入锁定）。"""
+    now = time.time()
+    fails = _LOGIN_FAIL.setdefault(host, [])
+    fails.append(now)
+    fails[:] = [t for t in fails if now - t < _LOGIN_WINDOW]
+    if len(fails) >= _LOGIN_MAX:
+        _LOGIN_LOCK[host] = now + _LOGIN_LOCK_S
+        return {"locked": True, "retry_after": int(_LOGIN_LOCK_S)}
+    return {"locked": False, "remaining": max(0, _LOGIN_MAX - len(fails))}
+
+
+def _login_clear(host: str) -> None:
+    _LOGIN_FAIL.pop(host, None)
+    _LOGIN_LOCK.pop(host, None)
+
+
 @app.post("/api/login")
-def login(username: str = Form(...), password: str = Form(...)) -> JSONResponse:
-    """口令换 cookie。**认证关闭时返回 400**（别让人以为登上了）。"""
+def login(request: Request, username: str = Form(...), password: str = Form(...)) -> JSONResponse:
+    """口令换 cookie。**认证关闭时返回 400**；失败带「剩余尝试次数」；连续失败临时锁定。
+
+    错误统一用 ``{"detail": {...}}`` 包裹，前端取 ``detail.msg / detail.remaining
+    / detail.retry_after``。
+    """
     a = get_auth()
     a.maybe_reload()
     if not a.enabled:
-        raise HTTPException(400, "本实例未启用认证")
+        raise HTTPException(400, detail={"msg": "本实例未启用认证"})
+    host = _client_ip(request)
+    st = _login_state(host)
+    if st["locked"]:
+        raise HTTPException(429, detail={
+            "msg": "尝试次数过多，请 %d 秒后再试" % st["retry_after"],
+            "retry_after": st["retry_after"],
+        })
+    #: 用户名/口令错统一口径（防枚举账号），但用邮箱当账号名
     token = a.login(username.strip(), password)
     if not token:
-        #: 用户名/口令错统一口径 —— 不区分「没这人」和「口令错」（防枚举账号）
-        raise HTTPException(401, "用户名或口令不对")
+        note = _login_note_fail(host)
+        if note["locked"]:
+            raise HTTPException(429, detail={
+                "msg": "尝试次数过多，请 %d 秒后再试" % note["retry_after"],
+                "retry_after": note["retry_after"],
+            })
+        raise HTTPException(401, detail={
+            "msg": "邮箱或密码不正确", "remaining": note["remaining"],
+        })
+    _login_clear(host)
     resp = JSONResponse({"ok": True, "username": username.strip()})
     resp.set_cookie(
         AUTH.COOKIE_NAME, token, httponly=True, samesite="lax",
