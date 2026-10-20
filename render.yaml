@@ -2,7 +2,7 @@ services:
   - type: web
     name: voc
     runtime: python
-    plan: free            # 免费档会休眠；要常驻/持久盘选 paid 档
+    plan: starter          # 常驻不休眠；免费档改 free（但本地盘会随重启清空，账号/任务/上传都丢）
     buildCommand: pip install -r requirements.txt
     startCommand: python web/serve.py --host 0.0.0.0 --port $PORT
     envVars:
@@ -10,8 +10,14 @@ services:
         value: "1"
       - key: VOC_DEEPSEEK_API_KEY   # 真实密钥在 Render 控制台填，不要写进仓库
         sync: false
-    # 持久盘（需 paid 档）：取消注释并挂到 /data
-    # disk:
-    #   - name: data
-    #     mountPath: /data
-    #     sizeGB: 1
+      # 以下三个把状态/任务/上传都指到持久盘 /data，重启不丢（免费档没盘就别设）
+      - key: VOC_WEB_STATE_DIR
+        value: /data/web_state
+      - key: VOC_WEB_RUNS_DIR
+        value: /data/runs
+      - key: VOC_WEB_UPLOAD_DIR
+        value: /data/uploads
+    disk:
+      - name: data
+        mountPath: /data
+        sizeGB: 1
