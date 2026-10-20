@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voc-insights"
+version = "0.1.0"
+description = "通用 VOC 洞察内核：多源评论导出 → 标签 → 看板与洞察报告"
+readme = "eval/README.md"
+requires-python = ">=3.10"
+dependencies = []
+#: 依赖分层是刻意的 —— 内核本身**零依赖**（裸 `python -S -E` 必须能跑完七步），
+#: 所以 Web 与 xlsx 都是 extra，装了才需要。
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.27", "python-multipart>=0.0.9"]
+xlsx = ["openpyxl>=3.1"]
+dev = ["pytest>=7"]
+
+[tool.setuptools]
+packages = ["voc_core", "voc_core.adapters", "web"]
+
+[tool.setuptools.package-data]
+voc_core = ["kernel/*.py"]
+web = ["static/*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__/*", "*.pyc"]
+
+#: 关于安装方式的说明（**重要**）
+#: ---------------------------------------------------------------------------
+#: 内核在运行时按 ``PLATFORM_ROOT``（= 本文件所在目录）解析平台级资产：
+#: ``prompts/*.md``（提示词模板）、``frames/*.yaml``（分析框架）、``voc.py``（CLI）。
+#: 这些不是包内资源，打包成 wheel 会丢。
+#:
+#: 所以当前**受支持的安装方式是 editable**：
+#:
+#:     pip install -e ".[web,xlsx]"
+#:
+#: 这样树留在原地，``PLATFORM_ROOT`` 解析得到；``voc_core`` / ``web`` 也能被 import。
+#: 要做真正可分发的 wheel，需要把 prompts/ 与 frames/ 一并迁进包内并改
+#: ``PLATFORM_ROOT`` 的解析逻辑 —— 那是 Stage 9 之后的事，本阶段不做。

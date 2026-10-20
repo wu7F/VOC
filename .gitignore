@@ -1,0 +1,22 @@
+# 运行时生成的大目录
+runs/
+uploads/
+out/
+web_state/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# 密钥 / 本地配置
+.env
+*.key
+llm_config*.json
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db
+node_modules/

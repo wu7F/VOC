@@ -1,0 +1,219 @@
+# ===========================================================================
+# 消费品框架（默认）—— 按购买状态分桶
+# ===========================================================================
+# 这个文件是**平台化之前行为的等价声明**：不带 --frame 时加载它，
+# 渲染结果与改造前逐字节相同（由 tests/test_frame.py 的文案等价性用例守着）。
+#
+# 想改「分析什么」，改这个文件即可，不用碰 Python：
+#   * dimensions          —— 启用哪些维度、中文名、标签 category
+#   * segmentation_axis   —— 用哪个分类器分桶、桶怎么定义、桶映射到哪个画像维度
+#   * texts / dashboard   —— 报告与看板里跟轴有关的文案
+#
+# 文案里的 ${xxx} 是变量（string.Template 语法），可用变量见
+# voc_core/analysis_frame.py 的 Axis._base_ctx()。**这些句子请写成单行**：
+# 折行会被解析器合成一行并在断开处补一个空格，可能悄悄改变交付文案。
+#
+# 分类器的判定口径（标签键与五字段指令）不在这里，在 voc_core/classifiers.py ——
+# 那是「归桶闸门」，口径漂移会让份额数字悄悄不可比，所以刻意不让它跟着文案一起改。
+# ---------------------------------------------------------------------------
+
+name: consumer
+label: 消费品（按购买状态分桶）
+description: 默认框架：8 个维度；人群画像按购买状态拆为购买者 / 未购买者两桶。行为与平台化之前完全一致。
+
+# 每个维度让 LLM 归纳几个标签
+sample_tags_per_dim: 3
+
+dimensions:
+  # ---- 分段轴分类器维度（脚本注入，不交给 LLM 生成）----
+  - id: purchase_status
+    label: 购买状态判定
+    category: user
+    kind: classifier
+
+  # ---- 人群画像：按购买状态拆两个桶 ----
+  - id: user_personas_purchased
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}）——只描述**已购买/已拥有/正在使用**的人'
+    label: 购买者人群画像
+    category: user
+    persona_bucket: purchased
+    analysis_hint: 【判定前置】仅当该发言者已购买/已拥有/正在使用本品类产品时才可能标 yes；
+  - id: user_personas_non_purchased
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}）——只描述**尚未购买、正在选购/比较/观望**的人'
+    label: 未购买者人群画像
+    category: user
+    persona_bucket: non_purchased
+    analysis_hint: 【判定前置】仅当该发言者尚未购买、正在选购/比较/观望时才可能标 yes；
+
+  # 2026-10-06 废弃：不再有「购买状态不明者人群画像」，无法判断的单元直接排除。
+  # 旧标签集里可能有这个维度，声明成 deprecated 让聚合层安全忽略。
+  - id: user_personas_unknown
+    label: 购买状态不明者人群画像
+    category: user
+    deprecated: true
+
+  # ---- 其余分析维度 ----
+  - id: usage_scenarios
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}）'
+    label: 使用场景
+    category: scene
+  - id: pre_purchase_concerns
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}）'
+    label: 购买前关注点
+    category: pre_purchase
+  - id: post_purchase_experience
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}，体验类含 reason）'
+    label: 购买后体验
+    category: post_purchase
+    experience: true
+  - id: features
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}，体验类含 reason；必须按「${category}」品类重新生成功能点标签，不要套用其他品类）'
+    label: 功能体验
+    category: feature
+    experience: true
+  - id: unmet_needs
+    prompt_line: '- ${dim_id}（${dim_label}，category=${dim_category}，体验类含 reason）'
+    label: 未满足需求
+    category: feature
+    experience: true
+
+segmentation_axis:
+  dim: purchase_status
+  label: 购买状态
+  classifier: purchase_status
+  # 产物里的键名（保持与历史产物一致，下游/闸门按它找分布与计数）
+  distribution_key: purchase_status_distribution
+  unit_counts_key: purchase_status
+  # 进「画像 × 功能」矩阵的桶：只取已购（未购样本量小且关注点不同源，状态不明者是噪声量尺）
+  matrix_bucket: purchased
+  unknown_bucket: unknown
+  buckets:
+    - id: purchased
+      label_cn: 已购买者
+      short_label: 已购
+      judge_label: 已购买
+      persona_short: 购买者
+      persona_condition: 已购买
+      tags: [ps_purchased]
+      dashboard:
+        card_title: b. 购买者人群画像
+        card_subtitle: 已购买 / 已拥有 / 正在使用的人 · 计数单元 = ${merged}（柱内堆叠）；点击柱子可下钻到支撑原文
+        core_finding: 核心购买人群
+    - id: non_purchased
+      label_cn: 未购买者
+      short_label: 未购
+      judge_label: 未购买
+      persona_short: 未购买者
+      persona_condition: 尚未购买
+      tags: [ps_non_purchased]
+      dashboard:
+        card_title: c. 未购买者人群画像
+        card_subtitle: 尚未购买、正在选购 / 比较 / 观望的人 · 计数单元 = ${merged}（柱内堆叠）；点击柱子可下钻到支撑原文
+        core_finding: 核心未购人群
+    - id: unknown
+      label_cn: 无法判断
+      short_label: 无法判断
+      tags: [ps_unknown]
+      excluded: true
+
+  prompt_axis_question: 是否已购买该品类产品
+  prompt:
+    annotate_axis_rule: |
+      6. 若标签集中含 `${axis_dim}` 维度（${bucket_tag_list}），这三个标签**互斥且必有其一**：
+         先判断发言者${axis_question}，只能给其中一个标 yes，其余标 no；完全读不出时才给 ${excluded_tag} 标 yes。
+         该判定独立于人群画像标签，用作后续归桶闸门。
+    # 规则 7 后面那句「旧维度」提醒。它是**轴的口径**（读不出的到底是「是否购买」
+    # 还是「决策角色」），所以归框架配置；代码只补 3 空格缩进。多行块在 YAML 里
+    # 每行独立写，不要折行 —— 折行会在断开处补空格，悄悄改变交付文案。
+    deprecated_persona_note: |
+      若标签集内含 ${deprecated_dims} 维度（旧标签集），该维度下的标签只在**读不出是否购买**时才可能标 yes；
+      但请注意该维度已废弃，聚合阶段会被忽略，不必为其纠结。
+  texts:
+    # ---- 聚合产物里的口径说明 ----
+    scope_rule: 人群画像 = ${scope}；每个单元先由 ${axis_dim} 判为${bucket_list}，只把「${bucket0}」计入${persona0}、「${bucket1}」计入${persona1}，两桶严格互斥。
+    excluded_note: ${axis}判为「${excluded}」的单元（纯附和短评、泛泛围观、第三人称转述等）不计入任何人群画像桶，已从画像统计中排除；此处披露其数量，以免读者误以为画像覆盖了全部语料。
+
+    # ---- 报告文案 ----
+    report_data_limit: ${axis}判为「${excluded}」的单元（纯附和短评、泛泛围观、第三人称转述等）已从人群画像中排除、不在两桶之内——其数量在「二、人群画像」节披露，读画像结论时应知道这部分语料未被覆盖。
+    report_excluded_line: '**已排除单元**：另有 **${n}** 个单元${share}无法判定${axis}（纯附和短评、泛泛围观、第三人称转述等），未计入下表任何画像桶。'
+    report_persona_intro: 本节不再区分「发帖人 / ${secondary_speaker}」，而是**按${axis}**分两个画像——${persona_list}，且**${unit}单元与${secondary}单元合并计数**——因为${secondary}者往往本身就是该品类的使用者或潜在买家，拆成两套会人为割裂同一批人；${axis}无法判定的单元不计入任何画像桶（数量见下方披露）。
+    report_persona_intro_solo: 本节**按${axis}**分两个画像——${persona_list}；${axis}无法判定的单元不计入任何画像桶（数量见下方披露）。
+    report_distribution_title: ${axis}分布（归桶依据）
+    report_distribution_col: ${axis}
+    report_matrix_title: '**${matrix_bucket}人群画像 × 功能体验矩阵**（单元格 = ${unit_char}粒度交集计数 / 满意度；画像轴 = **仅${matrix_bucket}人群**画像标签——${bucket1}人群与${axis}不明人群均不入矩阵${note}）：'
+    # **报告**的矩阵尾注。它与看板同名的 matrix_note（在 dashboard 组里）**刻意不同**：
+    # 报告的小节标题前半句已经写了「画像轴 = 仅 X 人群画像标签——其余桶与轴不明人群
+    # 均不入矩阵」，再补一句「仅 X 帖入矩阵」只是重复。改这里**不会**影响看板。
+    # _solo 是给「无次级单元」的单层源用的空串 —— 尾部不会多出一个「评论单元」。
+    matrix_note: '；${secondary}单元无功能标注不进矩阵'
+    matrix_note_solo: ''
+
+  dashboard:
+    framework_items: 购买状态分布, 购买者人群画像, 未购买者人群画像, 使用场景, 购买前关注点, 购买后体验, 品牌分布, 未满足需求
+    framework_line: 分析框架：${framework_items} | 点击图表分类可查看支撑证据；人群画像为「${merged}」合并计数
+    axis_chart_title: a. 购买状态分布（购买意向漏斗）
+    axis_chart_subtitle: 每个发言单元（${unit_pair}）先判定「${judge_list}」：${bucket0}计入${persona0_short}桶、${bucket1}计入${persona1_short}桶，${excluded}的单元不计入任何画像桶
+    matrix_title: ${matrix_bucket}人群画像 × 功能 交叉分析热力图
+    matrix_subtitle: 纵轴：TOP 8 <b>${matrix_bucket}</b>画像标签（不含${bucket1} / 状态不明人群） | 横轴：TOP 10 功能 | 单元格：${unit}粒度交集计数 / 满意度${matrix_note}
+    # 看板专用：看板里主单元用全称「帖子」，报告的矩阵小节用简称「帖」，所以两处不共用一条。
+    # 这两条**必须加引号**：值以「空格 + 竖线」开头，不引起来的话 YAML 会把竖线
+    # 当块标量标记、前导空格被吃掉，副标题里就少一格空格。
+    matrix_note: " | 仅${matrix_bucket}${unit}入矩阵；${secondary}单元无功能标注，不进矩阵"
+    matrix_note_solo: " | 仅${matrix_bucket}${unit}入矩阵"
+
+# 看板模块开关：auto = 按数据可用性与源画像能力自动开关；false = 强制隐藏。
+category_legend:
+  user: 人群画像
+  scene: 使用场景
+  pre_purchase: 购买前关注点
+  post_purchase: 购买后体验
+  feature: 功能体验 / 未满足需求
+
+prompt:
+  purpose_line: '围绕「${category}」做 Reddit 用户原声多维度分析，拆解到人群（按是否购买分边）、场景、购前关注、购后体验、功能体验、未满足需求。'
+  # 注意这行**必须加引号**：值以 '# ' 开头，YAML 会把它当注释 → 整行变成 null
+  # （症状：dim_block 只剩维度行、丢了标题，而且不会有任何报错）。
+  dim_block_header: '## 维度框架（固定，标签值请基于下方样本语义归纳）'
+  summary_line: '请输出完整的标签集 JSON（${dim_count} 个维度都要有标签，每维度约 ${n} 个）。'
+  experience_note: 体验类维度（${experience_labels}）的标签额外含第 6 字段 {tag_key}_reason：2–5 个高频、精简、意思明确的中文原因短语词表（列表），回答「用户为什么提到这个标签」；分布类维度（${dist_dim_labels}）不需要 reason。
+  category_note: 每个标签必须带 `category` 元数据字段，取值严格为以下 ${category_count} 类之一：${category_legend}。单维度标签数建议 ${sample_tags_per_dim} 个左右，不超过 25。
+  persona_requirements: |
+    **人群画像的两个维度（user_personas_purchased / user_personas_non_purchased）有特殊要求**：
+    - 标注单元**同时包含${unit}（发帖人）与${secondary}（${secondary_speaker}）**，两者是同一个池子里的不同声音。
+      归纳标签时不要把「发帖人」和「${secondary_speaker}」拆成两套人，而要按**购买状态**归桶。
+    - `user_personas_purchased` 的标签只描述**已购买 / 已拥有 / 正在使用**该产品的人；
+      `user_personas_non_purchased` 的标签只描述**尚未购买、正在选购 / 比较 / 观望**的人。
+    - 每个画像标签的 `thoughts` 必须写明「仅当发言者已购买（尚未购买）时才标 yes」，
+      并给出可判定的身份 / 语境信号，避免两桶串味。
+    - 两侧标签语义不要重复：同一类人按购买状态只应落在一侧。
+    - **不要输出 `user_personas_unknown`（购买状态不明者人群画像）**：该维度已废弃，
+      购买状态读不出的单元在聚合阶段会被直接排除，不需要为它设计标签。
+    - 不要输出 `${axis_dim}` 维度（由脚本固定注入），也不要输出 `user_personas`、
+      `user_personas_comments` 等旧维度键。
+  axis_note: |
+    注意：`${axis_dim}`（${axis_dim_label}）维度由程序固定注入，不需要你输出。
+    标注单元既包括${unit}（发帖人自述），也包括${secondary}（${secondary_speaker}发言），两者合并计数——
+    人群画像标签要能同时套用到这两类声音上。
+  json_shape: |
+    {
+      "tagset": {
+        "name": "...",
+        "category": "<品类>",
+        "analysis_purpose": "...",
+        "description": "...",
+        "dimensions": {
+          "user_personas_purchased": {"label": "购买者人群画像", "tags": {"<tag_key>": {"label_cn": "中文标签名", "category": "user", "thoughts": "...（须写明『已购买』判定条件）", "mentioned": "...", "original_text": "...", "<tag_key>_summary": "...", "sentiment": "n/a"}}},
+          "user_personas_non_purchased": {"label": "未购买者人群画像", "tags": {"<tag_key>": {"label_cn": "中文标签名", "category": "user", "thoughts": "...（须写明『尚未购买』判定条件）", "mentioned": "...", "original_text": "...", "<tag_key>_summary": "...", "sentiment": "n/a"}}},
+          "usage_scenarios": {"label": "使用场景", "tags": {"<tag_key>": {"category": "scene", ...}}},
+          "pre_purchase_concerns": {"label": "购买前关注点", "tags": {"<tag_key>": {"category": "pre_purchase", ...}}},
+          "post_purchase_experience": {"label": "购买后体验", "tags": {"<tag_key>": {"category": "post_purchase", "...", "<tag_key>_reason": ["原因1","原因2"]}}},
+          "features": {"label": "功能体验", "tags": {"<tag_key>": {"category": "feature", "...", "<tag_key>_reason": ["原因1"]}}},
+          "unmet_needs": {"label": "未满足需求", "tags": {"<tag_key>": {"category": "feature", "...", "<tag_key>_reason": ["原因1"]}}}
+        }
+      }
+    }
+
+modules:
+  rating_distribution: auto
+  brand_matrix: true
+  persona_feature_matrix: auto

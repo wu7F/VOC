@@ -1,0 +1,217 @@
+# ===========================================================================
+# B2B / 组织采购框架 —— 按决策角色分桶（**没有购买状态维度**）
+# ===========================================================================
+# 用途：分析企业级产品（设备、软件、服务）的采购讨论。这类语料里
+# 「买没买」几乎没有意义 —— 发言的多是「我们在评估」「我们上个月上线了」，
+# 真正有区分度的是**发言者在这笔采购里是什么角色**：拍板的人关心总成本与风险，
+# 评估的人关心集成与对比，一线使用者关心上手难度与故障。
+#
+# 用法：
+#   python voc.py tags  --frame b2b_role --category "XX" --relevant ... --out tagset.json
+#   之后 annotate / aggregate / report / dashboard 都不用再传 --frame ——
+#   框架信息写在 tagset.json 里，一路带到产物，下游从产物读。
+#
+# 与 consumer 的区别只有三处（这就是「配置化」的意思）：
+#   1. dimensions 换了：decision_role 取代 purchase_status，画像拆成三个角色桶；
+#   2. segmentation_axis 换了：桶是角色、进矩阵的是决策者；
+#   3. 文案换了：所有提到「购买状态 / 已购 / 未购」的句子都改成了角色口径。
+# 闸门逻辑、聚合算法、看板渲染一行没改。
+# ---------------------------------------------------------------------------
+
+name: b2b_role
+label: B2B（按决策角色分桶）
+description: 组织采购框架：按发言者在采购中的角色（决策者 / 影响者 / 使用者）分桶，不追踪购买状态。
+
+sample_tags_per_dim: 3
+
+dimensions:
+  - id: decision_role
+    label: 决策角色判定
+    category: user
+    kind: classifier
+
+  - id: user_personas_decision_maker
+    label: 决策者人群画像
+    category: user
+    persona_bucket: decision_maker
+    analysis_hint: 【判定前置】仅当该发言者在这笔采购里有拍板 / 审批权时才可能标 yes；
+  - id: user_personas_influencer
+    label: 影响者人群画像
+    category: user
+    persona_bucket: influencer
+    analysis_hint: 【判定前置】仅当该发言者能影响选型但无最终决定权时才可能标 yes；
+  - id: user_personas_end_user
+    label: 使用者人群画像
+    category: user
+    persona_bucket: end_user
+    analysis_hint: 【判定前置】仅当该发言者是一线使用者、不参与选型时才可能标 yes；
+
+  - id: usage_scenarios
+    label: 使用场景
+    category: scene
+  - id: pre_purchase_concerns
+    label: 采购前关注点
+    category: pre_purchase
+  - id: post_purchase_experience
+    label: 采购后体验
+    category: post_purchase
+    experience: true
+  - id: features
+    label: 功能体验
+    category: feature
+    experience: true
+  - id: unmet_needs
+    label: 未满足需求
+    category: feature
+    experience: true
+
+segmentation_axis:
+  dim: decision_role
+  label: 决策角色
+  classifier: decision_role
+  # 产物键名跟着轴走：B2B 产物里不该出现一个叫 purchase_status_distribution 的键
+  distribution_key: decision_role_distribution
+  unit_counts_key: decision_role
+  # 进矩阵的桶：决策者（他们的关注点最接近「采购决策依据」，可读性最好）
+  matrix_bucket: decision_maker
+  unknown_bucket: unclear
+  buckets:
+    - id: decision_maker
+      label_cn: 决策者
+      short_label: 决策者
+      judge_label: 决策者
+      persona_short: 决策者
+      persona_condition: 在这笔采购中有拍板 / 审批权
+      tags: [dr_decision_maker]
+      dashboard:
+        card_title: b. 决策者人群画像
+        card_subtitle: 拍板 / 审批这笔采购的人 · 计数单元 = ${merged}（柱内堆叠）；点击柱子可下钻到支撑原文
+        core_finding: 核心决策者议题
+    - id: influencer
+      label_cn: 影响者
+      short_label: 影响者
+      judge_label: 影响者
+      persona_short: 影响者
+      persona_condition: 能影响选型但无最终决定权
+      tags: [dr_influencer]
+      dashboard:
+        card_title: c. 影响者人群画像
+        card_subtitle: 参与评估 / 出短名单但无权拍板的人 · 计数单元 = ${merged}（柱内堆叠）；点击柱子可下钻到支撑原文
+        core_finding: 核心评估者议题
+    - id: end_user
+      label_cn: 使用者
+      short_label: 使用者
+      judge_label: 使用者
+      persona_short: 使用者
+      persona_condition: 是一线使用者、不参与选型
+      tags: [dr_end_user]
+      dashboard:
+        card_title: d. 使用者人群画像
+        card_subtitle: 一线日常使用的人 · 计数单元 = ${merged}（柱内堆叠）；点击柱子可下钻到支撑原文
+        core_finding: 核心使用者痛点
+    - id: unclear
+      label_cn: 角色不明
+      short_label: 角色不明
+      judge_label: 角色不明
+      tags: [dr_unclear]
+      excluded: true
+
+  prompt_axis_question: 发言者在这笔采购中扮演什么决策角色
+  prompt:
+    annotate_axis_rule: |
+      6. 若标签集中含 `${axis_dim}` 维度（${bucket_tag_list}），这三个标签**互斥且必有其一**：
+         先判断发言者${axis_question}，只能给其中一个标 yes，其余标 no；完全读不出时才给 ${excluded_tag} 标 yes。
+         该判定独立于人群画像标签，用作后续归桶闸门。
+    # 旧画像维度提醒的**轴口径**：B2B 里读不出的「决策角色」，不是「是否购买」。
+    deprecated_persona_note: |
+      若标签集内含 ${deprecated_dims} 维度（旧标签集），该维度下的标签只在**读不出决策角色**时才可能标 yes；
+      但请注意该维度已废弃，聚合阶段会被忽略，不必为其纠结。
+
+  texts:
+    scope_rule: 人群画像 = ${scope}；每个单元先由 ${axis_dim} 判为${bucket_list}，只把「${bucket0}」计入${persona0}、「${bucket1}」计入${persona1}、「${bucket2}」计入${persona2}，各桶严格互斥。
+    excluded_note: ${axis}判为「${excluded}」的单元（纯附和短评、泛泛围观、第三人称转述等）不计入任何人群画像桶，已从画像统计中排除；此处披露其数量，以免读者误以为画像覆盖了全部语料。
+
+    report_data_limit: ${axis}判为「${excluded}」的单元（纯附和短评、泛泛围观、第三人称转述等）已从人群画像中排除、不在各桶之内——其数量在「二、人群画像」节披露，读画像结论时应知道这部分语料未被覆盖。
+    report_excluded_line: '**已排除单元**：另有 **${n}** 个单元${share}无法判定${axis}（纯附和短评、泛泛围观、第三人称转述等），未计入下表任何画像桶。'
+    report_persona_intro: 本节不再区分「发帖人 / ${secondary_speaker}」，而是**按${axis}**分三个画像——${persona_list}，且**${unit}单元与${secondary}单元合并计数**——因为同一个采购项目里不同角色都会发言，按人拆两套会人为割裂同一批人；${axis}无法判定的单元不计入任何画像桶（数量见下方披露）。
+    report_persona_intro_solo: 本节**按${axis}**分三个画像——${persona_list}；${axis}无法判定的单元不计入任何画像桶（数量见下方披露）。
+    report_distribution_title: ${axis}分布（归桶依据）
+    report_distribution_col: ${axis}
+    report_matrix_title: '**${matrix_bucket}人群画像 × 功能体验矩阵**（单元格 = ${unit_char}粒度交集计数 / 满意度；画像轴 = **仅${matrix_bucket}人群**画像标签——其他角色（${other_buckets}）与${axis}不明人群均不入矩阵${note}）：'
+    # **报告**的矩阵尾注。它与看板同名的 matrix_note（在 dashboard 组里）**刻意不同**：
+    # 报告的小节标题前半句已经写了「画像轴 = 仅 X 人群画像标签——其余桶与轴不明人群
+    # 均不入矩阵」，再补一句「仅 X 帖入矩阵」只是重复。改这里**不会**影响看板。
+    # _solo 是给「无次级单元」的单层源用的空串 —— 尾部不会多出一个「评论单元」。
+    matrix_note: '；${secondary}单元无功能标注不进矩阵'
+    matrix_note_solo: ''
+
+  dashboard:
+    framework_items: 决策角色分布, 决策者人群画像, 影响者人群画像, 使用者人群画像, 使用场景, 采购前关注点, 采购后体验, 品牌分布, 未满足需求
+    framework_line: 分析框架：${framework_items} | 点击图表分类可查看支撑证据；人群画像为「${merged}」合并计数
+    axis_chart_title: a. 决策角色分布（采购角色构成）
+    axis_chart_subtitle: 每个发言单元（${unit_pair}）先判定「${judge_list}」：${bucket0}计入${persona0_short}桶、${bucket1}计入${persona1_short}桶、${bucket2}计入${persona2_short}桶，${excluded}的单元不计入任何画像桶
+    matrix_title: ${matrix_bucket}人群画像 × 功能 交叉分析热力图
+    matrix_subtitle: 纵轴：TOP 8 <b>${matrix_bucket}</b>画像标签（不含${other_buckets} / ${excluded}人群） | 横轴：TOP 10 功能 | 单元格：${unit}粒度交集计数 / 满意度${matrix_note}
+    matrix_note: " | 仅${matrix_bucket}${unit}入矩阵；${secondary}单元无功能标注，不进矩阵"
+    matrix_note_solo: " | 仅${matrix_bucket}${unit}入矩阵"
+
+# 类目图例（提示词里 category 元数据的合法取值说明，与 consumer 同一套 category 键）。
+category_legend:
+  user: 人群画像
+  scene: 使用场景
+  pre_purchase: 采购前关注点
+  post_purchase: 采购后体验
+  feature: 功能体验 / 未满足需求
+
+# 标签设计提示词的框架片段。结构与 consumer.prompt 一一对应（缺任何一个，
+# design_tags 构建提示词都会 KeyError —— b2b_role 曾因整个漏掉这段，
+# Web 上一选 b2b 框架 tags 步骤就退出码 1）。口径全部换成决策角色。
+prompt:
+  purpose_line: '围绕「${category}」做组织采购讨论的多维度分析，拆解到决策角色（决策者 / 影响者 / 使用者）、场景、采购前关注、采购后体验、功能体验、未满足需求。'
+  # 注意这行**必须加引号**：值以 '# ' 开头，YAML 会把它当注释 → 整行变成 null。
+  dim_block_header: '## 维度框架（固定，标签值请基于下方样本语义归纳）'
+  summary_line: '请输出完整的标签集 JSON（${dim_count} 个维度都要有标签，每维度约 ${n} 个）。'
+  experience_note: 体验类维度（${experience_labels}）的标签额外含第 6 字段 {tag_key}_reason：2–5 个高频、精简、意思明确的中文原因短语词表（列表），回答「发言者为什么提到这个标签」；分布类维度（${dist_dim_labels}）不需要 reason。
+  category_note: 每个标签必须带 `category` 元数据字段，取值严格为以下 ${category_count} 类之一：${category_legend}。单维度标签数建议 ${sample_tags_per_dim} 个左右，不超过 25。
+  persona_requirements: |
+    **人群画像的三个维度（user_personas_decision_maker / user_personas_influencer / user_personas_end_user）有特殊要求**：
+    - 标注单元**同时包含${unit}（发帖人）与${secondary}（${secondary_speaker}）**，两者是同一个池子里的不同声音。
+      归纳标签时不要把「发帖人」和「${secondary_speaker}」拆成两套人，而要按**决策角色**归桶。
+    - `user_personas_decision_maker` 的标签只描述**在这笔采购中有拍板 / 审批权**的人；
+      `user_personas_influencer` 的标签只描述**能影响选型但无最终决定权**的人；
+      `user_personas_end_user` 的标签只描述**一线使用、不参与选型**的人。
+    - 每个画像标签的 `thoughts` 必须写明「仅当发言者属于该角色时才标 yes」，
+      并给出可判定的身份 / 语境信号，避免三桶串味。
+    - 三侧标签语义不要重复：同一类人按决策角色只应落在一侧。
+    - **不要输出 `user_personas_unclear`（角色不明者人群画像）**：该维度已废弃，
+      决策角色读不出的单元在聚合阶段会被直接排除，不需要为它设计标签。
+    - 不要输出 `${axis_dim}` 维度（由脚本固定注入），也不要输出 `user_personas`、
+      `user_personas_comments` 等旧维度键。
+  axis_note: |
+    注意：`${axis_dim}`（${axis_dim_label}）维度由程序固定注入，不需要你输出。
+    标注单元既包括${unit}（发帖人自述），也包括${secondary}（${secondary_speaker}发言），两者合并计数——
+    人群画像标签要能同时套用到这两类声音上。
+  json_shape: |
+    {
+      "tagset": {
+        "name": "...",
+        "category": "<品类>",
+        "analysis_purpose": "...",
+        "description": "...",
+        "dimensions": {
+          "user_personas_decision_maker": {"label": "决策者人群画像", "tags": {"<tag_key>": {"label_cn": "中文标签名", "category": "user", "thoughts": "...（须写明『有拍板 / 审批权』判定条件）", "mentioned": "...", "original_text": "...", "<tag_key>_summary": "...", "sentiment": "n/a"}}},
+          "user_personas_influencer": {"label": "影响者人群画像", "tags": {"<tag_key>": {"label_cn": "中文标签名", "category": "user", "thoughts": "...（须写明『能影响选型但无决定权』判定条件）", "mentioned": "...", "original_text": "...", "<tag_key>_summary": "...", "sentiment": "n/a"}}},
+          "user_personas_end_user": {"label": "使用者人群画像", "tags": {"<tag_key>": {"label_cn": "中文标签名", "category": "user", "thoughts": "...（须写明『一线使用、不参与选型』判定条件）", "mentioned": "...", "original_text": "...", "<tag_key>_summary": "...", "sentiment": "n/a"}}},
+          "usage_scenarios": {"label": "使用场景", "tags": {"<tag_key>": {"category": "scene", ...}}},
+          "pre_purchase_concerns": {"label": "采购前关注点", "tags": {"<tag_key>": {"category": "pre_purchase", ...}}},
+          "post_purchase_experience": {"label": "采购后体验", "tags": {"<tag_key>": {"category": "post_purchase", "...", "<tag_key>_reason": ["原因1","原因2"]}}},
+          "features": {"label": "功能体验", "tags": {"<tag_key>": {"category": "feature", "...", "<tag_key>_reason": ["原因1"]}}},
+          "unmet_needs": {"label": "未满足需求", "tags": {"<tag_key>": {"category": "feature", "...", "<tag_key>_reason": ["原因1"]}}}
+        }
+      }
+    }
+
+modules:
+  rating_distribution: auto
+  brand_matrix: true
+  persona_feature_matrix: auto

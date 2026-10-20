@@ -1,0 +1,23 @@
+## 品类
+${category}
+
+## 分析目的
+围绕「${category}」做 Reddit 用户原声多维度分析，拆解到人群（按是否购买分边）、场景、购前关注、购后体验、功能体验、未满足需求。
+
+## 维度框架（固定，标签值请基于下方样本语义归纳）
+- user_personas_purchased（购买者人群画像，category=user）——只描述**已购买/已拥有/正在使用**的人
+- user_personas_non_purchased（未购买者人群画像，category=user）——只描述**尚未购买、正在选购/比较/观望**的人
+- usage_scenarios（使用场景，category=scene）
+- pre_purchase_concerns（购买前关注点，category=pre_purchase）
+- post_purchase_experience（购买后体验，category=post_purchase，体验类含 reason）
+- features（功能体验，category=feature，体验类含 reason；必须按「${category}」品类重新生成功能点标签，不要套用其他品类）
+- unmet_needs（未满足需求，category=feature，体验类含 reason）
+
+注意：`purchase_status`（购买状态判定）维度由程序固定注入，不需要你输出。
+标注单元既包括帖子（发帖人自述），也包括评论（评论者发言），两者合并计数——
+人群画像标签要能同时套用到这两类声音上。
+
+## A+B 样本帖子（供归纳标签值参考，前 ${nsample} 条）
+${samples}
+${comment_block}
+请输出完整的标签集 JSON（7 个维度都要有标签，每维度约 ${n} 个）。

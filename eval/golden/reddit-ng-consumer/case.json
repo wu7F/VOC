@@ -1,0 +1,18 @@
+{
+  "id": "reddit-ng-consumer",
+  "label": "Nursery Glider Recliner · Reddit 真实标注 · consumer 框架",
+  "mode": "annot-tail",
+  "category": "Nursery Glider Recliner",
+  "source": "reddit",
+  "frame": "consumer",
+  "tier": "core",
+  "_why": "本案的输入是**归档的真实 LLM 标注**（154 帖 + 7662 评论），期望值是 2026-10-06 那次人眼复核过的结论。两者之间的确定性尾部（aggregate → report → dashboard → validate）可重跑，实测字段级完全复现 —— 所以这是一个信号最高的回归：它守的不是「产物自洽」，而是「结论没漂」。",
+  "paths": {
+    "annot_dir": "annot/runs/ng2026",
+    "tagset": "tags/reddit_tagset.json",
+    "relevant": "data/reddit_analysis/reddit_posts_relevant.csv",
+    "comments": "data/reddit_analysis/reddit_comments_relevant.csv",
+    "stats": "data/reddit_analysis/reddit_analysis_stats.json",
+    "tagged": "data/reddit_analysis/reddit_posts_tagged.csv"
+  }
+}

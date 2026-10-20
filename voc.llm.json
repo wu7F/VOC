@@ -1,0 +1,6 @@
+{
+  "backend": "openai",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-chat",
+  "api_key_env": "VOC_DEEPSEEK_API_KEY"
+}

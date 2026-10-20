@@ -1,0 +1,44 @@
+{
+  "_note": "人工核对过的正确答案。断言是**下界式**的：这里写了的必须成立，没写的不限制（例如 unmet_needs 的计数只有 0/1，排序不稳，就不锚）。来源：2026-10-06 那次真实分析（reports/reddit_analysis_dimensions.json），2026-10-08 Stage 8 逐项复核。",
+  "_guard": "purchase_status / excluded_unknown_units / persona_covered_units 三条合起来，正好守住「移除购买状态不明者画像」那类改动：改一次归桶口径或画像门控，它们必然变。",
+
+  "total_units": 7816,
+  "metrics": {
+    "persona_covered_units": 1284,
+    "tag_covered_units": 2149,
+    "evidence_total": 3343
+  },
+  "purchase_status": {
+    "purchased": 4223,
+    "non_purchased": 116
+  },
+  "excluded_unknown_units": 3477,
+
+  "top_labels": {
+    "usage_scenarios": ["客厅通用座椅", "夜间喂养与哄睡"],
+    "pre_purchase_concerns": ["舒适度与扶手支撑", "价格与预算约束"],
+    "post_purchase_experience": ["高频使用与值得投资"]
+  },
+
+  "quote_anchors": [
+    {
+      "dim": "usage_scenarios",
+      "label_cn": "客厅通用座椅",
+      "quote": "Otherwise we already owned a comfy chair in the living room (a big armchair, not a glider) so that became my other spot."
+    },
+    {
+      "dim": "pre_purchase_concerns",
+      "label_cn": "舒适度与扶手支撑",
+      "quote": "I do want to stress that being comfortable for long periods of time is VERY important though."
+    },
+    {
+      "dim": "post_purchase_experience",
+      "label_cn": "高频使用与值得投资",
+      "quote": "I use mine constantly."
+    }
+  ],
+
+  "evidence_verbatim_rate_min": 0.98,
+  "gate_verdict_in": ["pass", "warn"],
+  "gate_failed_max": 0
+}

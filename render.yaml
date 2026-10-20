@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: voc
+    runtime: python
+    plan: free            # 免费档会休眠；要常驻/持久盘选 paid 档
+    buildCommand: pip install -r requirements.txt
+    startCommand: python web/serve.py --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: VOC_WEB_AUTH
+        value: "1"
+      - key: VOC_DEEPSEEK_API_KEY   # 真实密钥在 Render 控制台填，不要写进仓库
+        sync: false
+    # 持久盘（需 paid 档）：取消注释并挂到 /data
+    # disk:
+    #   - name: data
+    #     mountPath: /data
+    #     sizeGB: 1

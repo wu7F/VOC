@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOC 洞察平台</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #ffffff; --line: #e2e0da; --line2: #cfccc4;
+    --fg: #23231f; --fg2: #6b6a63; --fg3: #96958e;
+    --accent: #2f6f5e; --accent-soft: #e6f2ee;
+    --warn: #8a6410; --warn-soft: #fbf1da;
+    --err: #a83a34; --err-soft: #fbeceb;
+    --info: #2b5b8a; --info-soft: #e8f0f8;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  header {
+    padding: 18px 26px; background: var(--card); border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+  header .sub { color: var(--fg2); font-size: 12px; }
+  header .grow { flex: 1; }
+  header code { font: 11px/1.6 ui-monospace, Consolas, monospace; color: var(--fg3); }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 26px 60px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 18px;
+  }
+  .card > h2 {
+    margin: 0 0 14px; font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card > h2 .hint { font-weight: 400; font-size: 12px; color: var(--fg3); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 12px; color: var(--fg2); margin-bottom: 4px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; padding: 7px 9px; font: inherit; font-size: 13px;
+    border: 1px solid var(--line2); border-radius: 7px; background: #fff; color: var(--fg);
+  }
+  input[type=file] { width: 100%; font-size: 12px; }
+  textarea { min-height: 62px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg); }
+  .check input { width: auto; }
+  button {
+    font: inherit; font-size: 13px; padding: 8px 16px; border-radius: 7px;
+    border: 1px solid var(--line2); background: #fff; color: var(--fg); cursor: pointer;
+  }
+  button:hover { border-color: var(--fg3); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.mini { padding: 3px 9px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-weight: 500; color: var(--fg2); font-size: 12px; white-space: nowrap; }
+  tbody tr:hover { background: #fafaf8; }
+  .tag {
+    display: inline-block; padding: 1px 8px; border-radius: 20px;
+    font-size: 11px; white-space: nowrap; border: 1px solid transparent;
+  }
+  .s-queued { background: #f1efea; color: var(--fg2); border-color: var(--line2); }
+  .s-running { background: var(--info-soft); color: var(--info); border-color: #c3d8ec; }
+  .s-done { background: var(--accent-soft); color: var(--accent); border-color: #bfdcd2; }
+  .s-warn { background: var(--warn-soft); color: var(--warn); border-color: #edd9a8; }
+  .s-err { background: var(--err-soft); color: var(--err); border-color: #efc8c5; }
+  .s-idle { background: #f1efea; color: var(--fg3); border-color: var(--line2); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--fg3); }
+  .empty { color: var(--fg3); padding: 18px 4px; font-size: 13px; }
+  .bar { height: 4px; background: #eceae4; border-radius: 4px; overflow: hidden; min-width: 64px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  /* 弹层 */
+  .mask {
+    position: fixed; inset: 0; background: rgba(28,28,24,.45);
+    display: none; align-items: center; justify-content: center; padding: 22px; z-index: 50;
+  }
+  .mask.on { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 12px; width: 100%; max-width: 980px;
+    max-height: 92vh; display: flex; flex-direction: column; overflow: hidden;
+    border: 1px solid var(--line2);
+  }
+  .modal header {
+    padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fbfbf9;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .modal header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .modal .body { padding: 16px 18px; overflow: auto; }
+  .modal .foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; }
+  .steps { list-style: none; margin: 0 0 14px; padding: 0; }
+  .steps li {
+    display: grid; grid-template-columns: 150px 78px 62px 1fr; gap: 10px;
+    padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 12px; align-items: center;
+  }
+  .steps li .nm { font-weight: 500; }
+  pre.log {
+    background: #fbfbf9; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; max-height: 260px; overflow: auto; margin: 0;
+    font: 11px/1.65 ui-monospace, Consolas, monospace; color: #3a3a34; white-space: pre-wrap;
+  }
+  iframe.report { width: 100%; height: 74vh; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .kv { display: grid; grid-template-columns: 132px 1fr; gap: 4px 12px; font-size: 12px; margin-bottom: 14px; }
+  .kv dt { color: var(--fg3); }
+  .kv dd { margin: 0; word-break: break-all; }
+  .toast {
+    position: fixed; right: 22px; bottom: 22px; background: #23231f; color: #fff;
+    padding: 10px 16px; border-radius: 8px; font-size: 13px; opacity: 0;
+    transition: opacity .2s; pointer-events: none; z-index: 90; max-width: 420px;
+  }
+  .toast.on { opacity: .94; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VOC 洞察平台</h1>
+  <span class="sub">上传导出文件 → 自动跑完七步 → 看板与洞察报告</span>
+  <span class="grow"></span>
+  <span class="tag s-idle" id="modeInfo" title="worker 形态 / 存储后端">—</span>
+  <span id="loginArea" style="display:none"></span>
+  <code id="envInfo">—</code>
+</header>
+
+<!-- 登录：只有服务端 auth_enabled 时才显示 -->
+<section class="card" id="loginCard" style="display:none">
+  <h2>登录 <span class="hint">本实例启用了认证 —— 未登录时看不到任何任务</span></h2>
+  <div class="row">
+    <div style="min-width:170px;flex:1">
+      <label>用户名</label>
+      <input type="text" id="l_user" autocomplete="username">
+    </div>
+    <div style="min-width:170px;flex:1">
+      <label>口令</label>
+      <input type="password" id="l_pass" autocomplete="current-password">
+    </div>
+    <div style="align-self:flex-end">
+      <button class="primary" id="l_go">登录</button>
+    </div>
+  </div>
+</section>
+
+<main>
+  <section class="card">
+    <h2>新建分析 <span class="hint">内核零改动：这就是 <span class="mono">voc.py run</span> 的 Web 版</span></h2>
+    <form id="form">
+      <div class="grid">
+        <div>
+          <label>主数据文件（xlsx / csv / json）</label>
+          <input type="file" id="f_file" required>
+        </div>
+        <div>
+          <label>评论文件（可选）</label>
+          <input type="file" id="f_comments">
+          <small class="muted">上传 Reddit「批量导出」xlsx 时，系统会自动提取其中的评论半并一并分析；仅当要追加额外评论文件时才需要单独选。</small>
+        </div>
+        <div>
+          <label>品类 / 产品名</label>
+          <input type="text" id="f_category" placeholder="Nursery Glider Recliner">
+        </div>
+        <div>
+          <label>分析框架</label>
+          <select id="f_frame"></select>
+        </div>
+        <div>
+          <label>数据源</label>
+          <select id="f_source"></select>
+        </div>
+        <div>
+          <label>源画像（决定用户可见文案）</label>
+          <select id="f_profile"></select>
+        </div>
+        <div>
+          <label>只看最近 N 年（留空 = 不过滤）</label>
+          <input type="number" id="f_age" step="0.5" min="0" placeholder="2">
+        </div>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <label>品牌清单（逗号分隔）</label>
+          <textarea id="f_brands" placeholder="示例：Babyletto, Davinci, Storkcraft"></textarea>
+        </div>
+        <div>
+          <label>关键词（逗号分隔）</label>
+          <textarea id="f_keywords" placeholder="示例：nursery glider, glider, recliner"></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <label class="check"><input type="checkbox" id="f_mock" checked> 用 mock 后端（不消耗 LLM 额度，先跑通链路）</label>
+        <span class="grow"></span>
+        <button type="submit" class="primary" id="btnSubmit">开始分析</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>任务 <span class="hint" id="listHint">每 3 秒自动刷新</span>
+      <span class="grow" style="flex:1"></span>
+      <button class="mini" onclick="poll()">立即刷新</button>
+    </h2>
+    <div id="list"><div class="empty">还没有任务。</div></div>
+  </section>
+</main>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <header>
+      <h3 id="mTitle">任务详情</h3>
+      <span class="grow" style="flex:1"></span>
+      <button class="mini" onclick="closeModal()">关闭</button>
+    </header>
+    <div class="body" id="mBody"></div>
+    <div class="foot">
+      <button class="mini" id="mRefresh" onclick="refreshDetail()">刷新</button>
+      <button class="mini primary" id="mReport" onclick="openReport()">打开报告</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var STATE_TEXT = {
+  queued:           ['排队中', 's-queued'],
+  running:          ['运行中', 's-running'],
+  done:             ['完成', 's-done'],
+  done_with_warnings:['完成（有警告）', 's-warn'],
+  done_with_errors: ['完成（有质量问题）', 's-err'],
+  waiting_manual:   ['等待人工回填', 's-warn'],
+  failed:           ['失败', 's-err'],
+  interrupted:      ['已中断', 's-idle'],
+  unknown:          ['—', 's-idle']
+};
+
+function el(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function toast(msg) {
+  var t = el('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('on'); }, 3600);
+}
+function tag(st) {
+  var m = STATE_TEXT[st] || [st, 's-idle'];
+  return '<span class="tag ' + m[1] + '">' + esc(m[0]) + '</span>';
+}
+
+/* ---- 元信息 ---- */
+var META = {};
+fetch('/api/meta').then(function (r) { return r.json(); }).then(function (m) {
+  META = m;
+  function fill(id, arr) {
+    el(id).innerHTML = arr.map(function (v) {
+      return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+    }).join('');
+  }
+  fill('f_frame', m.frames);
+  fill('f_source', m.sources);
+  fill('f_profile', m.profiles);
+  el('f_frame').value = m.frames.indexOf('consumer') >= 0 ? 'consumer' : (m.frames[0] || '');
+  el('envInfo').textContent = m.runs_dir;
+  el('modeInfo').textContent = 'worker:' + (m.worker_mode || '?')
+    + ' · 存储:' + ((m.storage && m.storage.scheme) || '?');
+  applyMe(m.me);
+});
+
+/* ---- 登录 ---- */
+function applyMe(me) {
+  var need = !!META.auth_enabled && !me;
+  el('loginCard').style.display = need ? '' : 'none';
+  el('loginArea').style.display = (META.auth_enabled || me) ? '' : 'none';
+  if (me) {
+    el('loginArea').innerHTML = '<span class="tag s-done">' + esc(me.username)
+      + ' <span class="muted">' + esc(me.role) + '</span></span> '
+      + '<button class="mini" onclick="doLogout()">退出</button>';
+  } else if (META.auth_enabled) {
+    el('loginArea').innerHTML = '<span class="tag s-err">未登录</span>';
+  }
+}
+function doLogin() {
+  var fd = new FormData();
+  fd.append('username', el('l_user').value);
+  fd.append('password', el('l_pass').value);
+  fetch('/api/login', { method: 'POST', body: fd })
+    .then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); })
+    .then(function (p) {
+      if (!p[0]) { toast('登录失败：' + (p[1].detail || '未知原因')); return; }
+      el('l_pass').value = '';
+      toast('已登录：' + p[1].username);
+      applyMe({ username: p[1].username, role: '' });
+      poll();
+    })
+    .catch(function (e) { toast('登录出错：' + e); });
+}
+function doLogout() {
+  fetch('/api/logout', { method: 'POST' })
+    .then(function () { applyMe(null); poll(); });
+}
+el('l_go').addEventListener('click', doLogin);
+el('l_pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+
+/** 统一处理 401：跳回登录面板，别让用户对着空列表发呆。 */
+function guard401(res) {
+  if (res.status === 401) {
+    applyMe(null);
+    toast('登录已失效或没有权限，请重新登录');
+    return true;
+  }
+  return false;
+}
+
+/* ---- 提交 ---- */
+el('form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  var f = el('f_file').files[0];
+  if (!f) { toast('请先选一个主数据文件'); return; }
+  // 归一化：中文全角逗号/分号/顿号/换行一律转成半角逗号，防止整串被当成一个词
+  var normTerms = function (s) { return s.replace(/[\uff0c\uff1b\u3001;\r\n\t]+/g, ',').replace(/^,+|,+$/g, '').trim(); };
+  var brands = normTerms(el('f_brands').value);
+  var keywords = normTerms(el('f_keywords').value);
+  el('f_brands').value = brands;
+  el('f_keywords').value = keywords;
+  if (!brands && !keywords) {
+    toast('品牌与关键词至少填一项：相关性分级（A/B/C/D）靠它们匹配，全空会把全部数据判为噪声桶（A+B=0）');
+    el('f_brands').focus();
+    return;
+  }
+  if (el('f_mock').checked && !confirm('已勾选「mock 后端」：标签用内置示例集、不调用 LLM，报告不是真实分析结果。确定继续吗？')) { return; }
+  var fd = new FormData();
+  fd.append('file', f);
+  var c = el('f_comments').files[0];
+  if (c) fd.append('comments', c);
+  fd.append('category', el('f_category').value);
+  fd.append('frame', el('f_frame').value);
+  fd.append('source', el('f_source').value);
+  fd.append('profile', el('f_profile').value);
+  fd.append('brands', el('f_brands').value);
+  fd.append('keywords', el('f_keywords').value);
+  fd.append('max_age_years', el('f_age').value);
+  fd.append('mock', el('f_mock').checked ? 'true' : 'false');
+
+  el('btnSubmit').disabled = true;
+  fetch('/api/jobs', { method: 'POST', body: fd })
+    .then(function (r) {
+      if (guard401(r)) return null;
+      return r.json().then(function (j) { return [r.ok, j]; });
+    })
+    .then(function (p) {
+      if (!p) return;
+      if (!p[0]) { toast('提交失败：' + (p[1].detail || JSON.stringify(p[1]))); return; }
+      toast('已提交：' + p[1].job_id);
+      el('form').reset();
+      poll();
+    })
+    .catch(function (e) { toast('提交出错：' + e); })
+    .finally(function () { el('btnSubmit').disabled = false; });
+});
+
+/* ---- 列表 ---- */
+var lastJobs = [];
+function poll() {
+  fetch('/api/jobs').then(function (r) {
+    if (guard401(r)) return null;
+    return r.json();
+  }).then(function (d) {
+    if (!d) return;
+    lastJobs = d.jobs || [];
+    render();
+  });
+}
+function render() {
+  var box = el('list');
+  if (!lastJobs.length) { box.innerHTML = '<div class="empty">还没有任务。</div>'; return; }
+  var showOwner = lastJobs.some(function (j) { return j.owner; });
+  var h = '<table><thead><tr><th>任务</th><th>状态</th><th>进度</th><th>闸门</th>'
+        + (showOwner ? '<th>提交者</th>' : '')
+        + '<th>品类 / 框架</th><th>时间</th><th></th></tr></thead><tbody>';
+  lastJobs.forEach(function (j) {
+    var pct = j.total ? Math.round(100 * j.done / j.total) : 0;
+    var gate = '';
+    if (j.gate) {
+      var g = j.gate;
+      var cls = g.errors ? 's-err' : (g.warnings ? 's-warn' : 's-done');
+      gate = '<span class="tag ' + cls + '">' + (g.passed || 0) + '/' + (g.total || 0) + '</span>';
+    }
+    h += '<tr>'
+      + '<td class="mono">' + esc(j.job_id) + (j.error ? '<div class="muted" style="font-size:11px">' + esc(j.error) + '</div>' : '') + '</td>'
+      + '<td>' + tag(j.status) + '</td>'
+      + '<td><div class="row" style="gap:7px"><span class="muted" style="font-size:12px;min-width:34px">' + j.done + '/' + j.total + '</span><span class="bar" style="width:56px"><i style="width:' + pct + '%"></i></span></div></td>'
+      + '<td>' + gate + '</td>'
+      + (showOwner ? '<td class="muted" style="font-size:12px">' + esc(j.owner || '—') + '</td>' : '')
+      + '<td>' + esc(j.category || '—') + '<div class="muted" style="font-size:11px">' + esc(j.frame || 'consumer') + '</div></td>'
+      + '<td class="muted" style="font-size:12px;white-space:nowrap">' + esc((j.updated_at || j.submitted_at || '').replace('T', ' ')) + '</td>'
+      + '<td style="white-space:nowrap">'
+      +   '<button class="mini" onclick="openDetail(\'' + esc(j.job_id) + '\')">详情</button> '
+      +   (j.has_report ? '<button class="mini" onclick="openReport(\'' + esc(j.job_id) + '\')">报告</button>' : '')
+      + '</td></tr>';
+  });
+  box.innerHTML = h + '</tbody></table>';
+}
+
+/* ---- 详情 ---- */
+var curJob = null, detailTimer = null;
+function openDetail(id) {
+  curJob = id;
+  el('mTitle').textContent = id;
+  el('mask').classList.add('on');
+  refreshDetail();
+  clearInterval(detailTimer);
+  detailTimer = setInterval(refreshDetail, 2000);
+}
+function refreshDetail() {
+  if (!curJob) return;
+  fetch('/api/jobs/' + encodeURIComponent(curJob)).then(function (r) {
+    if (guard401(r)) return null;
+    return r.json();
+  }).then(function (d) {
+    if (!d) return;
+    if (d.detail) { el('mBody').innerHTML = '<div class="empty">' + esc(d.detail) + '</div>'; return; }
+    var h = '';
+    h += '<dl class="kv">'
+      + '<dt>状态</dt><dd>' + tag(d.status) + ' <span class="muted mono">job.json: ' + esc(d.job_status || '—') + '</span></dd>'
+      + (d.owner ? '<dt>提交者</dt><dd class="mono">' + esc(d.owner) + '</dd>' : '')
+      + '<dt>品类</dt><dd>' + esc(d.spec.category || '—') + '</dd>'
+      + '<dt>框架 / 画像</dt><dd>' + esc(d.spec.frame || '') + ' / ' + esc(d.spec.profile || '') + (d.spec.mock ? ' <span class="tag s-idle">mock</span>' : '') + '</dd>'
+      + '<dt>累计耗时</dt><dd>' + (d.elapsed_s || 0) + ' 秒</dd>'
+      + (d.gate ? '<dt>闸门</dt><dd>' + (d.gate.passed || 0) + ' 通过 / ' + (d.gate.failed || 0) + ' 未通过 / ' + (d.gate.skipped || 0) + ' 跳过</dd>' : '')
+      + (d.error ? '<dt>说明</dt><dd style="color:var(--err)">' + esc(d.error) + '</dd>' : '')
+      + '</dl>';
+    if (d.steps && d.steps.length) {
+      h += '<ul class="steps">';
+      d.steps.forEach(function (s) {
+        var cls = s.status === 'done' ? 's-done' : (s.status === 'skipped' ? 's-idle'
+                : (s.status === 'failed' ? 's-err' : (s.status === 'pending' ? 's-idle' : 's-warn')));
+        h += '<li><span class="nm">' + esc(s.label || s.key) + '</span>'
+          + '<span class="tag ' + cls + '">' + esc(s.status) + '</span>'
+          + '<span class="muted">' + (s.elapsed_s || 0) + 's</span>'
+          + '<span class="muted">' + (s.note ? esc(s.note) : (s.outputs ? s.outputs + ' 个产物' : '')) + '</span></li>';
+      });
+      h += '</ul>';
+    }
+    h += '<div class="muted" style="font-size:12px;margin:4px 0 6px">日志（最近 40 行）</div>';
+    h += '<pre class="log">' + esc((d.recent_log || []).join('\n') || '（还没有日志）') + '</pre>';
+    h += '<div class="muted" style="font-size:12px;margin:12px 0 6px">复现命令（内核自带）</div>';
+    h += '<pre class="log">' + esc(d.reproduce || '') + '</pre>';
+    el('mBody').innerHTML = h;
+    el('mReport').style.display = (d.files || []).indexOf('dashboard') >= 0 ? '' : 'none';
+  });
+}
+function openReport(id) {
+  var jid = id || curJob;
+  if (!jid) return;
+  curJob = jid;
+  fetch('/api/jobs/' + encodeURIComponent(jid)).then(function (r) { return r.json(); }).then(function (d) {
+    if ((d.files || []).indexOf('dashboard') < 0) { toast('看板还没生成（管线可能还没跑到 dashboard 这一步）'); return; }
+    el('mTitle').textContent = jid + ' · 看板';
+    el('mBody').innerHTML = '<iframe class="report" src="/api/jobs/' + encodeURIComponent(jid) + '/report"></iframe>';
+    el('mask').classList.add('on');
+    clearInterval(detailTimer);
+    el('mReport').style.display = 'none';
+  });
+}
+function closeModal() {
+  el('mask').classList.remove('on');
+  el('mBody').innerHTML = '';
+  clearInterval(detailTimer);
+}
+el('mask').addEventListener('click', function (e) { if (e.target === el('mask')) closeModal(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

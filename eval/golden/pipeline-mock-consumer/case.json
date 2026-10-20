@@ -1,0 +1,20 @@
+{
+  "id": "pipeline-mock-consumer",
+  "label": "Reddit mock 端到端 7 步 · consumer 框架",
+  "mode": "pipeline",
+  "category": "Nursery Glider Recliner",
+  "source": "reddit",
+  "frame": "consumer",
+  "tier": "extended",
+  "_why": "从**原始导出**起步走完 Stage 7 的 7 步编排（mock 后端）。它在测编排层本身：clean 的分桶与评论收窄、tags 的标签集、annotate 的中间件、aggregate 的归桶、report/dashboard 的生成、validate 的闸门。信号没有真实标注案高（mock 标签是占位符），但它守的是**整条链路的确定性**。",
+  "spec": {
+    "input": "data/reddit_analysis/reddit_posts.csv",
+    "comments": "data/reddit_analysis/reddit_comments.csv",
+    "profile": "reddit",
+    "keywords": "nursery glider,nursery chair,glider,recliner,rocker,swivel glider,nursing chair,feeding chair,nursery,baby room,gliding,reclining",
+    "brands": "Babyletto,La-Z-Boy,CHITA,Pottery Barn Kids,DaVinci,Namesake,Nurture&,Dutailier,Storkcraft,Delta Children,IKEA,Dream On Me,Baby Relax,Westwood,Evolur,Best Chairs,Carter's",
+    "max_age_years": 2.0,
+    "mock": true
+  },
+  "_tier_note": "mock 端到端案单次约 3 分钟（annotate 要写 7816 个中间文件），所以不在默认档；改编排层时用 --tier extended 或 --all 跑。"
+}

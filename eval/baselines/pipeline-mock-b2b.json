@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "case": "pipeline-mock-b2b",
+  "mode": "pipeline",
+  "frame": "b2b_role",
+  "total_units": 7816,
+  "units": {
+    "post": 154,
+    "comment": 7662
+  },
+  "axis": {
+    "key": "decision_role_distribution",
+    "label": "决策角色",
+    "counts": {
+      "decision_maker": 97,
+      "influencer": 207,
+      "end_user": 225
+    }
+  },
+  "excluded_unknown_units": 7287,
+  "excluded_unknown_ratio": 0.932318,
+  "persona_covered_units": 0,
+  "persona_coverage": 0.0,
+  "tag_covered_units": 334,
+  "tag_coverage": 0.042733,
+  "evidence_total": 334,
+  "evidence_missed": 0,
+  "evidence_verbatim_rate": 1.0,
+  "dim_sizes": {
+    "user_personas_decision_maker": 2,
+    "user_personas_influencer": 2,
+    "user_personas_end_user": 2,
+    "usage_scenarios": 2,
+    "pre_purchase_concerns": 2,
+    "post_purchase_experience": 2,
+    "unmet_needs": 2,
+    "brand_mentions": 17
+  },
+  "conclusions": {
+    "usage_scenarios": [
+      [
+        "scene_a",
+        0
+      ],
+      [
+        "scene_b",
+        0
+      ]
+    ],
+    "pre_purchase_concerns": [
+      [
+        "pre_a",
+        0
+      ],
+      [
+        "pre_b",
+        0
+      ]
+    ],
+    "post_purchase_experience": [
+      [
+        "post_issue",
+        0
+      ],
+      [
+        "post_ok",
+        0
+      ]
+    ],
+    "unmet_needs": [
+      [
+        "need_a",
+        0
+      ],
+      [
+        "need_b",
+        0
+      ]
+    ]
+  },
+  "quote_anchors": [],
+  "gate": {
+    "verdict": "warn",
+    "passed": 19,
+    "failed": 1,
+    "skipped": 1,
+    "failed_checks": [
+      "presentation_placeholders"
+    ]
+  },
+  "products": {
+    "dimensions": "c0cf0b7b86eff69e3d8c6abda5cef9fa9be5e0d5",
+    "features": "94baa2c8902056022443bc5b2d6f7dc10226e399"
+  }
+}

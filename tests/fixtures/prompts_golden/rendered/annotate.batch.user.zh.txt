@@ -1,0 +1,27 @@
+## 标签集定义（按维度，每标签含 5 字段指令）
+### 维度: features
+#### 标签 key: nursery_glider (category=feature)
+- thoughts: 用户提到摇篮椅的摇摆功能
+- mentioned: Output 'yes' or 'no'. If 'no', leave all other fields blank.
+- original_text: 抽取打标对应的原文片段
+- nursery_glider_summary: 具体功能点
+- nursery_glider_reason (原因词表): 省力、哄睡快
+- sentiment: positive / neutral / negative
+### 维度: user_personas_non_purchased
+#### 标签 key: budget_shopper (category=user)
+- thoughts: 仅当发言者尚未购买时才标 yes
+- mentioned: Output 'yes' or 'no'. If 'no', leave all other fields blank.
+- original_text: 抽取打标对应的原文片段
+- budget_shopper_summary: 预算区间与比较维度
+- sentiment: n/a
+
+## 待标注帖子（共 2 篇，请按帖子 id 输出）
+[1] id=p1
+标题: Best glider ever
+正文: I bought this glider and it is comfortable
+
+[2] id=p2
+标题: Looking for a recliner
+正文: Any recommendations for a nursery chair?
+
+请输出一个 JSON 对象：顶层键为帖子 id（即上面每行 'id=' 后的字符串），每个值为该帖的标注对象（结构同单帖：顶层键为标签 key，值为该标签的 5 字段对象）。只输出 JSON。

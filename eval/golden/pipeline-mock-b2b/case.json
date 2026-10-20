@@ -1,0 +1,20 @@
+{
+  "id": "pipeline-mock-b2b",
+  "label": "Reddit mock 端到端 7 步 · b2b_role 框架（与 consumer 案同输入、仅换框架）",
+  "mode": "pipeline",
+  "category": "Nursery Glider Recliner",
+  "source": "reddit",
+  "frame": "b2b_role",
+  "tier": "extended",
+  "_why": "与 pipeline-mock-consumer **同输入、同参数，只换分析框架**。这是 Stage 5 那条结论的长期守卫：换框架时，上游一个字节都不该变、下游按框架声明改（轴从「购买状态」换成「决策角色」，维度 8 → 9）。",
+  "spec": {
+    "input": "data/reddit_analysis/reddit_posts.csv",
+    "comments": "data/reddit_analysis/reddit_comments.csv",
+    "profile": "reddit",
+    "keywords": "nursery glider,nursery chair,glider,recliner,rocker,swivel glider,nursing chair,feeding chair,nursery,baby room,gliding,reclining",
+    "brands": "Babyletto,La-Z-Boy,CHITA,Pottery Barn Kids,DaVinci,Namesake,Nurture&,Dutailier,Storkcraft,Delta Children,IKEA,Dream On Me,Baby Relax,Westwood,Evolur,Best Chairs,Carter's",
+    "max_age_years": 2.0,
+    "mock": true,
+    "frame": "b2b_role"
+  }
+}
