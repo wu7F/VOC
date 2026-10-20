@@ -5,8 +5,9 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-# 隧道名需与 cloudflared tunnel create 时一致（默认示例为 vocvps）
-ExecStart=/usr/local/bin/cloudflared tunnel run vocvps
+User=root
+# 隧道名需与本地已有隧道一致（你本机那条叫 voc，直接复用）
+ExecStart=/usr/local/bin/cloudflared tunnel run voc
 Restart=always
 RestartSec=5
 
