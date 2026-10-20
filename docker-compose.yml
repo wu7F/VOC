@@ -1,0 +1,42 @@
+# VOC洞察平台 · 云端常驻部署（阿里云轻量 / 任意 VPS）
+#
+# 用法：
+#   docker compose up -d --build          构建并后台启动
+#   docker compose logs -f --tail=80      看日志
+#   docker compose restart                改完 .env 后重启
+#   docker compose down                   停止（数据卷保留）
+#
+# 端口只绑 127.0.0.1：外部一律走 Cloudflare 隧道，源站不直接暴露。
+# 数据全部在命名卷 voc_data 里 → 重建容器不丢账号 / 报告 / 上传。
+services:
+  voc:
+    build:
+      context: .
+      args:
+        INSTALL_CHROMIUM: "${INSTALL_CHROMIUM:-0}"
+    image: voc-insight:latest
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      VOC_DATA_DIR: /data
+      PORT: "8080"
+      VOC_MAX_UPLOAD_MB: "${VOC_MAX_UPLOAD_MB:-200}"
+      # 大模型（DeepSeek 等）：留空则走内置离线引擎，功能不中断
+      LLM_CONNECTOR_BASE_URL: "${LLM_CONNECTOR_BASE_URL:-}"
+      LLM_CONNECTOR_API_KEY: "${LLM_CONNECTOR_API_KEY:-}"
+      LLM_CONNECTOR_MODEL: "${LLM_CONNECTOR_MODEL:-}"
+      # 首次启动自动建账号（accounts.json 不存在时生效，之后改了也不覆盖）
+      VOC_PASSWORD: "${VOC_PASSWORD:-}"
+      VOC_PASSWORD_EMAIL: "${VOC_PASSWORD_EMAIL:-}"
+    volumes:
+      - voc_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+volumes:
+  voc_data:
