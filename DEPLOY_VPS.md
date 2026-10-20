@@ -82,6 +82,35 @@ systemctl enable --now cloudflared
 把本地 `~/.cloudflared/`（含 `cert.pem` 与 `<tunnel-id>.json`）拷到 VPS 同路径，
 然后**本机先停掉 `cloudflared`**，VPS 上执行 `cloudflared tunnel run voc` 即可。
 
+```bash
+# 本机 Git Bash 执行；把 1.2.3.4 换成服务器真实公网 IP（别带尖括号）
+scp -r ~/.cloudflared root@1.2.3.4:/root/
+```
+
+> 注意：终端里**不要整段粘贴带注释的多行块**，Git Bash 会混入 `$'\E[200~'` 之类的
+> 括号粘贴控制字符导致报错；一次只粘一行命令。
+
+### 方案 C（最省事，推荐：Cloudflare 后台托管隧道 + Token）
+
+不用 scp、不用 root 密码、不用 `cloudflared login`，全在浏览器点选：
+
+1. Cloudflare 控制台 → **Zero Trust** → **Networks → Tunnels** → **Create a tunnel**
+2. 选 **Cloudflared** → 命名 `voc-vps` → Save
+3. 页面会给出安装命令，复制其中的 **token**（`eyJ...` 那一长串）
+4. 在 VPS 终端执行（把 `eyJ...` 换成你的 token，命令是一整行）：
+   ```bash
+   curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared && cloudflared service install eyJ...
+   ```
+   它会自动装成 systemd 服务并连上，状态在 Tunnel 页面显示 **HEALTHY**
+5. 回到 Tunnel → **Public Hostname** → **Add a public hostname**：
+   - Subdomain: `voc`
+   - Domain: `voctyc.cn`
+   - Service: **HTTP** → `localhost:8080`
+6. 若提示 DNS 记录已存在：先去 **DNS → Records** 把旧的 `voc` CNAME
+   （指向 `dd7f8bc4-...cfargotunnel.com` 的那条）删掉，再回来添加
+
+完成后本机 `cloudflared` 可以停掉，域名由 VPS 的隧道接管。
+
 ---
 
 ## 4. 收尾
