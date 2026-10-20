@@ -130,7 +130,7 @@ cd "$DIR"
 # ---------- 4) 写 .env ----------
 echo "[4/6] 配置环境变量..."
 if [ ! -f .env ] || ! grep -q "VOC_DEEPSEEK_API_KEY" .env 2>/dev/null; then
-  read_tty "请输入 VOC_DEEPSEEK_API_KEY（DeepSeek 密钥，直接回车可跳过）: " 1; echo
+  read_tty "请输入 VOC_DEEPSEEK_API_KEY（输入不回显，粘贴后按回车；直接回车可跳过）: " 1; echo
   KEY="$REPLY"
   printf 'VOC_DEEPSEEK_API_KEY=%s\n' "$KEY" > .env
   chmod 600 .env
@@ -169,7 +169,7 @@ $COMPOSE up -d --build
 # ---------- 6) 建首账号 ----------
 echo "[6/6] 创建第一个管理员账号..."
 read_tty "管理员邮箱: "; EMAIL="$REPLY"
-read_tty "管理员密码: " 1; echo; PW="$REPLY"
+read_tty "管理员密码（输入不回显，粘贴后按回车）: " 1; echo; PW="$REPLY"
 if [ -n "${EMAIL:-}" ] && [ -n "${PW:-}" ]; then
   $COMPOSE exec -T voc python -m web.auth --state-dir /data/web_state adduser "$EMAIL" --role admin --password "$PW"
 else
