@@ -109,7 +109,23 @@ fi
 
 # ---------- 3) 拉代码 ----------
 echo "[3/6] 获取代码..."
-if [ ! -d "$DIR/.git" ]; then
+if [ -f web/serve.py ]; then
+  # 已经是仓库根目录（在该目录里直接 bash deploy.sh）→ 不再 clone
+  echo "      当前目录已是项目根目录，跳过 clone"
+  if [ -d .git ]; then
+    git pull --ff-only 2>/dev/null && echo "      已更新到最新代码" || echo "      跳过更新（无网络或有本地改动），继续用当前代码"
+  fi
+elif [ -d "$DIR/.git" ]; then
+  echo "      目录 $DIR 已存在，尝试更新..."
+  cd "$DIR"
+  git pull --ff-only 2>/dev/null || echo "      更新失败，继续用现有代码"
+elif [ -d "$DIR" ]; then
+  echo "!! 目录 $DIR 已存在但不是完整仓库（缺 web/serve.py）。"
+  echo "   请先清理后重跑：  cd ~ && rm -rf VOC && bash deploy.sh"
+  echo "   （VOC 里只有代码；账号/任务数据在容器卷里，不受影响）"
+  exit 1
+else
+  echo "      克隆仓库..."
   if ! git clone "$REPO" "$DIR"; then
     echo "      直接 clone 失败，尝试国内镜像 ghfast.top ..."
     if git clone "https://ghfast.top/https://github.com/wu7F/VOC.git" "$DIR"; then
@@ -121,11 +137,9 @@ if [ ! -d "$DIR/.git" ]; then
       exit 1
     fi
   fi
-else
-  echo "      目录已存在，尝试更新..."
-  git -C "$DIR" pull --ff-only 2>/dev/null || echo "      更新失败，继续用现有代码"
+  cd "$DIR"
 fi
-cd "$DIR"
+echo "      当前目录: $(pwd)"
 
 # ---------- 4) 写 .env ----------
 echo "[4/6] 配置环境变量..."
