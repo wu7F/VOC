@@ -1,0 +1,9 @@
+{
+  "base_url": "https://api.your-llm-provider.com/v1",
+  "api_key": "YOUR_API_KEY",
+  "model": "your-model-name",
+  "timeout": 120,
+  "retries": 2,
+  "max_tokens": 4096,
+  "json_mode": true
+}

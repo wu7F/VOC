@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOC洞察平台</title>
+<!-- 首屏关键样式：外部 CSS 尚未加载时即生效，杜绝白屏 / 平台外壳闪现 -->
+<style>
+  html, body { margin: 0; padding: 0; min-height: 100%; }
+  body { background: #0b1220; }
+  body.booting .topbar, body.booting .layout, body.booting .drawer-mask,
+  body.booting .drawer, body.booting .toast,
+  body.locked .topbar, body.locked .layout, body.locked .drawer-mask,
+  body.locked .drawer, body.locked .toast { visibility: hidden !important; }
+  .boot-screen {
+    position: fixed; inset: 0; z-index: 300;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; background: #0b1220; color: #cbd5e1;
+  }
+  .boot-screen .brand-mark {
+    width: 46px; height: 46px; font-size: 14px; background: #2f6df6; color: #fff;
+    border-radius: 13px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; letter-spacing: .04em;
+  }
+</style>
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/login.css">
+</head>
+<body class="booting">
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">VOC</div>
+    <div class="brand-text">
+      <div class="brand-title">VOC洞察平台</div>
+      <div class="brand-sub">Voice of Customer · 用户之声洞察</div>
+    </div>
+  </div>
+
+  <nav class="platform-tabs" id="platformTabs"></nav>
+
+  <div class="top-actions">
+    <div class="role-bar" id="roleBar" hidden>
+      <span id="roleName">未登录</span>
+      <button id="btnLogout" title="退出登录">退出</button>
+    </div>
+    <button class="engine-pill" id="enginePill" title="点击检测 LLM 连通性">
+      <span class="ep-dot" id="epDot"></span>
+      <span id="epText">内置引擎</span>
+    </button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <button class="btn-new" id="btnNew">
+      <span class="plus">+</span> 新建分析
+    </button>
+    <button class="sidebar-head" id="btnRecords" title="打开分析报告记录板块">
+      <span id="dsHeadLabel">分析报告记录</span>
+      <span class="sh-right"><span class="count" id="dsCount">0</span><span class="sh-go">查看 ›</span></span>
+    </button>
+
+    <div class="list-toolbar">
+      <select id="dsFilter" title="按平台筛选">
+        <option value="all">全部平台</option>
+      </select>
+      <button class="lt-btn" id="dsSort" title="切换排序方式">最新在前</button>
+      <button class="lt-btn" id="dsSelBtn" title="进入选择模式，可批量删除">选择</button>
+    </div>
+
+    <div class="sel-bar" id="dsSelBar" hidden>
+      <label class="sel-all"><input type="checkbox" id="dsAll"> 全选</label>
+      <span class="sel-count" id="dsSelCount">已选 0 条</span>
+      <button class="lt-btn danger" id="dsDelBtn">删除</button>
+      <button class="lt-btn" id="dsCancelBtn">取消</button>
+    </div>
+
+    <div class="dataset-list" id="dsList">
+      <div class="empty-hint">暂无分析记录<br><span>点击「新建分析」开始</span></div>
+    </div>
+  </aside>
+
+  <section class="content">
+    <!-- ============ 新建 / 上传视图 ============ -->
+    <div class="view" id="viewSetup">
+      <div class="setup-wrap">
+        <div class="setup-head">
+          <h1 id="setupTitle">Amazon · 新建 VOC 分析</h1>
+          <p id="setupDesc">上传数据文件，平台将自动完成适配 → 标注 → 聚合 → 报告。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">1 · 上传数据</div>
+            <div class="card-sub" id="uploadHint"></div>
+          </div>
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" multiple hidden>
+            <div class="dz-icon">⇪</div>
+            <div class="dz-main">点击选择文件，或拖拽到此处</div>
+            <div class="dz-sub">支持 .xlsx / .csv / .jsonl / .tsv　·　可多选</div>
+          </div>
+          <div class="file-list" id="fileList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">2 · 分析配置</div>
+            <div class="card-sub">留空将使用内置默认值</div>
+          </div>
+          <div class="form-grid">
+            <label class="field">
+              <span>品类名称</span>
+              <input type="text" id="fCategory" placeholder="如：Nursery Recliner / 婴儿房躺椅">
+            </label>
+            <label class="field" id="fieldCommentLimit">
+              <span>每帖纳入评论数</span>
+              <input type="number" id="fCommentLimit" value="20" min="0" max="100">
+            </label>
+            <label class="field full">
+              <span>品牌清单 <em>可选，英文逗号分隔；用 | 合并同一品牌的多种拼写</em></span>
+              <input type="text" id="fBrands"
+                     placeholder="La-Z-Boy|Lazy Boy, Monte, Dutailier, Chita, Babyletto">
+            </label>
+            <label class="field full">
+              <span>分析引擎 <em id="engineHint"></em></span>
+              <select id="fEngine"></select>
+            </label>
+            <label class="field full">
+              <span>记录名称 <em>可选</em></span>
+              <input type="text" id="fName" placeholder="自动生成">
+            </label>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn-primary" id="btnStart" disabled>开始分析</button>
+          <span class="run-note" id="runNote"></span>
+          <span class="rt-spacer"></span>
+          <button class="btn-ghost" id="btnPlatRecords" title="查看本平台已保存的分析报告">本平台报告记录</button>
+        </div>
+
+        <div class="error-box" id="errorBox" hidden>
+          <div class="eb-head">
+            <span class="eb-icon">!</span>
+            <span>分析失败</span>
+            <button class="icon-btn eb-close" id="errorClose">✕</button>
+          </div>
+          <pre class="eb-body" id="errorBody"></pre>
+        </div>
+
+        <div class="card demo-card" id="demoCard">
+          <div class="card-head">
+            <div class="card-title">或者，先看一份示例</div>
+            <div class="card-sub">内置示例数据，一键体验完整分析流程</div>
+          </div>
+          <div class="demo-list" id="demoList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 进度视图 ============ -->
+    <div class="view" id="viewProgress" hidden>
+      <div class="progress-wrap">
+        <div class="spinner"></div>
+        <h2 id="progTitle">正在分析…</h2>
+        <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+        <div class="progress-msg" id="progMsg">准备中…</div>
+        <div class="progress-pct" id="progPct">0%</div>
+      </div>
+    </div>
+
+    <!-- ============ 结果视图 ============ -->
+    <div class="view" id="viewResult" hidden>
+      <div class="result-head">
+        <div class="result-title-wrap">
+          <h1 id="resTitle">—</h1>
+          <div class="result-meta" id="resMeta"></div>
+        </div>
+        <div class="result-actions">
+          <button class="btn-ghost accent" id="btnExportPdf" title="把概览 / 六维分析 / 功能体验 / 人群与交叉 / 数据原声 / 报告 六个板块导出为一份 PDF">导出 PDF</button>
+          <button class="btn-ghost" id="btnExportTabPdf" title="只导出当前板块">导出本页 PDF</button>
+          <button class="btn-ghost" id="btnRerun">重新分析</button>
+          <button class="btn-ghost" id="btnExportMd">查看 Markdown</button>
+          <button class="btn-ghost danger" id="btnDelete">删除</button>
+        </div>
+      </div>
+
+      <div class="warn-box" id="warnBox" hidden></div>
+
+      <nav class="result-tabs" id="resultTabs">
+        <button data-tab="overview" class="active">概览</button>
+        <button data-tab="dimensions">六维分析</button>
+        <button data-tab="features">功能体验</button>
+        <button data-tab="persona">人群与交叉</button>
+        <button data-tab="voice">数据原声</button>
+        <button data-tab="report">报告</button>
+      </nav>
+
+      <div class="panel" id="panel-overview"></div>
+      <div class="panel" id="panel-dimensions" hidden></div>
+      <div class="panel" id="panel-features" hidden></div>
+      <div class="panel" id="panel-persona" hidden></div>
+      <div class="panel" id="panel-voice" hidden></div>
+      <div class="panel" id="panel-report" hidden></div>
+    </div>
+
+    <!-- ============ 分析报告记录 · 按平台独立板块 ============ -->
+    <div class="view" id="viewRecords" hidden>
+      <div class="records-wrap">
+        <div class="records-head">
+          <div class="records-title">
+            <h1 id="recTitle">分析报告记录</h1>
+            <p id="recDesc">每条报告都完整涵盖
+              <b>概览</b> · <b>六维分析</b> · <b>功能体验</b> · <b>人群与交叉</b> · <b>数据原声</b> · <b>报告</b> 六个板块，可随时查看、导出 PDF 或删除。</p>
+          </div>
+          <div class="records-actions">
+            <button class="btn-ghost" id="recNewAnalysis"><span class="plus">+</span> 新建分析</button>
+          </div>
+        </div>
+
+        <nav class="platform-subtabs" id="platformSubTabs"></nav>
+
+        <div class="records-toolbar">
+          <input type="text" id="recQuery" placeholder="搜索品类 / 名称…">
+          <select id="recPlat" title="按平台筛选"><option value="all">全部平台</option></select>
+          <button class="lt-btn" id="recSort" title="切换排序方式">最新在前</button>
+          <span class="rt-spacer"></span>
+          <button class="lt-btn cleanup" id="recCleanBtn" hidden title="清除已删除记录遗留的产出目录与上传原件">清理残留</button>
+          <span class="rt-stat" id="recStat"></span>
+          <button class="lt-btn" id="recSelBtn">批量选择</button>
+          <button class="lt-btn danger" id="recDelBtn" hidden>删除所选</button>
+          <button class="lt-btn" id="recCancelBtn" hidden>取消</button>
+        </div>
+
+        <div class="records-grid" id="recGrid"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 数据原声 · 详情抽屉 -->
+<div class="drawer-mask" id="drawerMask" hidden></div>
+<aside class="drawer" id="drawer" hidden>
+  <div class="drawer-head">
+    <span id="drawerTitle">详情</span>
+    <button class="icon-btn" id="drawerClose">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<!-- ============ 启动遮罩：鉴权结果出来之前，只显示这块 ============ -->
+<!-- 避免"先闪一下完整界面，再弹登录页"的割裂感 -->
+<div class="boot-screen" id="bootScreen">
+  <div class="boot-brand">
+    <div class="brand-mark">VOC</div>
+    <div>
+      <div class="boot-title">VOC洞察平台</div>
+      <div class="boot-sub">Voice of Customer · 用户之声洞察</div>
+    </div>
+  </div>
+  <div class="boot-bar"><i></i></div>
+</div>
+
+<!-- ============ 登录页 ============ -->
+<div class="login-screen" id="loginScreen" hidden>
+  <!-- 左侧品牌展示区 -->
+  <aside class="login-hero">
+    <div class="hero-top">
+      <div class="brand-mark lg">VOC</div>
+      <span class="hero-brand">VOC洞察平台</span>
+    </div>
+    <div class="hero-body">
+      <h1 class="hero-title">听见用户真实的声音</h1>
+      <p class="hero-sub">Voice of Customer · 多平台评论洞察分析</p>
+      <ul class="hero-points">
+        <li><span class="hp-ico">◆</span>电商 / 社媒评论自动适配 → 标注 → 聚合</li>
+        <li><span class="hp-ico">◆</span>六维分析 · 功能体验 · 人群画像 · 数据原声</li>
+        <li><span class="hp-ico">◆</span>一键生成可分享的洞察报告</li>
+      </ul>
+    </div>
+    <div class="hero-foot">账号由管理员统一创建 · 无自助注册</div>
+  </aside>
+
+  <!-- 右侧登录表单区 -->
+  <div class="login-panel">
+    <form class="login-card" id="loginForm" autocomplete="off">
+      <div class="login-card-head">
+        <div class="brand-mark sm">VOC</div>
+        <div>
+          <div class="login-title">欢迎回来</div>
+          <div class="login-sub">请使用邮箱与密码登录</div>
+        </div>
+      </div>
+      <div class="login-err" id="loginErr" hidden></div>
+      <label class="login-field">
+        <span>邮箱</span>
+        <div class="lf-input">
+          <svg class="lf-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z" fill="none"/><path d="M3 6l9 6 9-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <input type="email" id="loginEmail" placeholder="name@example.com" required autocomplete="username">
+        </div>
+      </label>
+      <label class="login-field">
+        <span>密码</span>
+        <div class="lf-input">
+          <svg class="lf-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10V8a6 6 0 1112 0v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="4.5" y="10" width="15" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          <input type="password" id="loginPw" placeholder="请输入密码" required autocomplete="current-password">
+          <button type="button" class="lf-toggle" id="loginPwToggle" title="显示 / 隐藏密码" aria-label="显示或隐藏密码">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+      </label>
+      <div class="login-row">
+        <label class="remember">
+          <input type="checkbox" id="loginRemember">
+          <span>记住密码</span>
+        </label>
+      </div>
+      <button class="login-btn" id="loginBtn" type="submit">进入平台</button>
+      <div class="login-hint" id="loginHint">
+        账号由平台管理员统一创建，没有自助注册。
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/vendor/echarts.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

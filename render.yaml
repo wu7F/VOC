@@ -1,0 +1,25 @@
+# Render 部署配置（GitHub 关联后自动读取）
+# 控制台里把仓库连上，Render 会用这份文件；环境变量值在 Render 面板填。
+services:
+  - type: web
+    name: voc-insight
+    runtime: python
+    plan: free          # 免费起步；需要常驻/不休眠改 starter 及以上
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server.app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 -k uvicorn.workers.UvicornWorker
+    envVars:
+      - key: VOC_DATA_DIR
+        value: /data
+      - key: VOC_MAX_UPLOAD_MB
+        value: "200"
+      - key: LLM_CONNECTOR_BASE_URL
+        sync: false      # 在 Render 面板填，不入库
+      - key: LLM_CONNECTOR_API_KEY
+        sync: false
+      - key: LLM_CONNECTOR_MODEL
+        sync: false
+    # 持久盘：报告/账号/LLM 配置都落这里，重启不丢
+    disk:
+      name: vocdata
+      mountPath: /data
+      sizeGB: 1

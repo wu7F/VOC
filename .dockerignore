@@ -1,0 +1,16 @@
+llm_config.json
+.env
+*.env
+accounts.json
+.session_secret
+VOCData/
+runs/
+data/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+_tools/
+.workbuddy/
+.git/
