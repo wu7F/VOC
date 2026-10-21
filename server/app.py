@@ -508,10 +508,16 @@ def _run_aftersale_job(did: str, files: list[str], platform: str, category: str,
             out_dir=out,
             progress=progress,
         )
+        _a = result["aftersale"]
+        if _a.get("mode") == "ledger":
+            _msg = (f"完成 · {_a['total_orders']} 条售后登记 · 台账模式（不计算售后率）"
+                    f" · {result['elapsed_sec']}s")
+        else:
+            _msg = (f"完成 · {_a['total_orders']} 单 · 售后率 {_a['overall_rate']:.1%}"
+                    f" · {result['elapsed_sec']}s")
         store.update(
             did, status="done", progress=100,
-            message=f"完成 · {result['aftersale']['total_orders']} 单 · "
-                    f"售后率 {result['aftersale']['overall_rate']:.1%} · {result['elapsed_sec']}s",
+            message=_msg,
             elapsed=result["elapsed_sec"],
             engine_used="aftersale-aggregate",
             warnings=result.get("warnings", []),
@@ -540,7 +546,8 @@ def api_aftersale_summary():
 
     用于售后VOC 父板块的总览看板（数据来自所有 aftersale 类型且已完成的报告）。
     """
-    roll = {"platforms": {}, "products": {}, "reasons": {}}
+    roll = {"platforms": {}, "products": {}, "reasons": {}, "categories": {}, "shops": {}}
+    modes: list[str] = []
     with _STORE_LOCK:
         recs = [d for d in store._data["datasets"]
                 if d.get("platform") in AFTERSALE_PLATFORMS and d.get("status") == "done"]
@@ -556,6 +563,7 @@ def api_aftersale_summary():
         a = r.get("aftersale")
         if not a:
             continue
+        modes.append(a.get("mode", "detail"))
         pf = roll["platforms"].setdefault(p, {"platform": p, "total": 0, "aftersale": 0})
         pf["total"] += a["total_orders"]
         pf["aftersale"] += a["aftersale_orders"]
@@ -567,27 +575,49 @@ def api_aftersale_summary():
             bucket["aftersale"] += pr["aftersale"]
         for rs in a["reasons"]:
             roll["reasons"][rs["reason"]] = roll["reasons"].get(rs["reason"], 0) + rs["count"]
+        for cg in a.get("categories") or []:
+            roll["categories"][cg["category"]] = roll["categories"].get(cg["category"], 0) + cg["count"]
+        for sh in a.get("shops") or []:
+            key = f"{p}||{sh['shop']}"
+            bucket = roll["shops"].setdefault(key, {
+                "platform": p, "shop": sh["shop"], "records": 0, "aftersale": 0})
+            bucket["records"] += sh.get("records", 0)
+            bucket["aftersale"] += sh.get("aftersale", 0)
+
+    # 只要有任一数据集是台账模式，整体就不给售后率（分母口径不一致）
+    ledger = "ledger" in modes
+    overall_mode = "ledger" if ledger else "detail"
 
     def _rate(b):
-        b["rate"] = round(b["aftersale"] / b["total"], 4) if b["total"] else 0.0
+        b["rate"] = round(b["aftersale"] / b["total"], 4) if (b["total"] and not ledger) else None
         return b
 
     platforms = sorted((_rate(v) for v in roll["platforms"].values()),
-                      key=lambda x: -x["rate"])
+                      key=lambda x: (-(x["rate"] or 0), -x["total"]))
     products = sorted((_rate(v) for v in roll["products"].values()),
-                     key=lambda x: (x["platform"], -x["rate"], -x["total"]))
+                     key=lambda x: (x["platform"], -(x["rate"] or 0), -x["total"]))
     rsum = sum(roll["reasons"].values()) or 1
     reasons = sorted(({"reason": k, "count": v, "pct": round(v / rsum, 4)}
                      for k, v in roll["reasons"].items()), key=lambda x: -x["count"])
+    csum = sum(roll["categories"].values()) or 1
+    categories = sorted(({"category": k, "count": v, "pct": round(v / csum, 4)}
+                        for k, v in roll["categories"].items()), key=lambda x: -x["count"])
+    shops = sorted(({"platform": v["platform"], "shop": v["shop"],
+                     "records": v["records"], "aftersale": v["aftersale"]}
+                    for v in roll["shops"].values()),
+                   key=lambda x: (x["platform"], -x["records"]))
     tot = sum(p["total"] for p in platforms)
     aft = sum(p["aftersale"] for p in platforms)
     return {
         "platforms": platforms,
         "products": products,
         "reasons": reasons,
+        "categories": categories,
+        "shops": shops,
+        "mode": overall_mode,
         "overall": {
             "total": tot, "aftersale": aft,
-            "rate": round(aft / tot, 4) if tot else 0.0,
+            "rate": (round(aft / tot, 4) if (tot and not ledger) else None),
         },
         "datasets": len(recs),
     }

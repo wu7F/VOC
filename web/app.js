@@ -1649,12 +1649,17 @@ function renderAftersale() {
   const a = r.aftersale;
   const plat = state.platforms.find(x => x.id === r.platform) || {};
   const color = plat.color || '#FF7A00';
-  const overall = (a.overall_rate * 100).toFixed(1) + '%';
+  const ledger = a.mode === 'ledger';
+  const shops = a.shops || [];
+  const cats = a.categories || [];
+  const rateTxt = (a.overall_rate == null) ? '—' : (a.overall_rate * 100).toFixed(1) + '%';
+  const cntLabel = ledger ? '售后登记条数' : '总订单数';
+  const asLabel = ledger ? '售后记录数' : '售后订单数';
   $('#resMeta').innerHTML = [
     `${c.created_at}`,
-    `${a.total_orders} 单`,
-    `${a.aftersale_orders} 笔售后`,
-    `整体售后率 ${overall}`,
+    `${a.total_orders} ${ledger ? '条' : '单'}`,
+    `${a.aftersale_orders} ${ledger ? '条售后' : '笔售后'}`,
+    ledger ? '台账模式 · 不计算售后率' : `整体售后率 ${rateTxt}`,
     `${state.result.elapsed_sec != null ? state.result.elapsed_sec : (c.elapsed || '-')}s`,
   ].map(esc).join('<span class="sep">·</span>');
   showWarnings(c.warnings);
@@ -1662,35 +1667,72 @@ function renderAftersale() {
   $$('.panel').forEach(p => p.hidden = p.id !== 'panel-overview');
 
   const html = `
+    ${ledger ? `<div class="as-note">
+      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，没有全量订单数做分母，
+      因此<b>不计算售后率</b>。下面展示的是售后<b>登记量</b>、问题分布与各店铺/产品的集中度。
+      ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
+    </div>` : ''}
     <div class="as-kpis">
-      <div class="as-kpi"><div class="as-kpi-v">${a.total_orders}</div><div class="as-kpi-l">总订单数</div></div>
-      <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">售后订单数</div></div>
-      <div class="as-kpi acc"><div class="as-kpi-v">${overall}</div><div class="as-kpi-l">整体售后率</div></div>
+      <div class="as-kpi"><div class="as-kpi-v">${a.total_orders}</div><div class="as-kpi-l">${cntLabel}</div></div>
+      <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">${asLabel}</div></div>
+      <div class="as-kpi acc"><div class="as-kpi-v">${rateTxt}</div><div class="as-kpi-l">整体售后率</div></div>
       <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">涉及产品</div></div>
+      ${shops.length ? `<div class="as-kpi"><div class="as-kpi-v">${shops.length}</div><div class="as-kpi-l">涉及子店铺</div></div>` : ''}
     </div>
     <div class="as-grid">
       <div class="as-card">
-        <h3>各产品售后率</h3>
+        <h3>${ledger ? '各产品售后登记量 TOP15' : '各产品售后率'}</h3>
         <div id="asRateChart" class="chart-380"></div>
       </div>
       <div class="as-card">
-        <h3>售后原因分布</h3>
+        <h3>售后问题大类分布</h3>
         <div id="asReasonChart" class="chart-380"></div>
       </div>
     </div>
+    ${shops.length ? `
     <div class="as-card">
-      <h3>各产品售后明细</h3>
+      <h3>各子店铺售后分布</h3>
       <table class="as-table">
-        <thead><tr><th>产品</th><th>总单数</th><th>售后单数</th><th>售后率</th><th>趋势</th></tr></thead>
+        <thead><tr><th>子店铺</th><th>登记条数</th><th>占比</th><th>主要问题</th><th>分布</th></tr></thead>
         <tbody>
-          ${a.products.map(p => `
-            <tr>
+          ${shops.map(s => {
+            const pct = a.total_orders ? (s.records / a.total_orders * 100) : 0;
+            const top = (s.top_reasons || []).map(t => `${esc(t.reason)}（${t.count}）`).join('、') || '—';
+            return `<tr>
+              <td>${esc(s.shop)}</td>
+              <td>${s.records}</td>
+              <td>${pct.toFixed(1)}%</td>
+              <td class="as-reasons">${top}</td>
+              <td><div class="bar"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+    <div class="as-card">
+      <h3>${ledger ? '各产品售后明细' : '各产品售后率明细'}</h3>
+      <table class="as-table">
+        <thead><tr><th>产品</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th><th>${ledger ? '占比' : '趋势'}</th></tr></thead>
+        <tbody>
+          ${a.products.map(p => {
+            if (ledger) {
+              const share = a.total_orders ? (p.aftersale / a.total_orders * 100) : 0;
+              return `<tr>
+                <td>${esc(p.product)}</td>
+                <td>${p.total}</td>
+                <td>${p.aftersale}</td>
+                <td>${esc(p.top_category || '—')}</td>
+                <td><div class="bar"><i style="width:${Math.min(100, share).toFixed(1)}%"></i></div></td>
+              </tr>`;
+            }
+            return `<tr>
               <td>${esc(p.product)}</td>
               <td>${p.total}</td>
               <td>${p.aftersale}</td>
               <td>${(p.rate * 100).toFixed(1)}%</td>
               <td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td>
-            </tr>`).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>`;
@@ -1702,31 +1744,50 @@ function renderAftersale() {
 
 function renderAsCharts(a, color) {
   if (typeof echarts === 'undefined') return;
+  const ledger = a.mode === 'ledger';
   const barEl = document.getElementById('asRateChart');
   if (barEl) {
     const chart = echarts.init(barEl);
     state.charts['asRateChart'] = chart;
     const top = a.products.slice(0, 15);
-    chart.setOption({
-      grid: { left: 8, right: 28, top: 16, bottom: 8, containLabel: true },
-      tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%` },
-      xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 1 },
-      yAxis: { type: 'category', data: top.map(p => p.product).reverse(),
-               axisLabel: { width: 130, overflow: 'truncate' } },
-      series: [{ type: 'bar', data: top.map(p => p.rate).reverse(), itemStyle: { color: color },
-                label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
-    });
+    if (ledger) {
+      // 台账模式：展示登记量（占比），不展示售后率
+      const total = a.total_orders || 1;
+      const vals = top.map(p => p.aftersale / total);
+      chart.setOption({
+        grid: { left: 8, right: 46, top: 16, bottom: 8, containLabel: true },
+        tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后登记 ${top[p[0].dataIndex].aftersale} 条 (${(p[0].value * 100).toFixed(1)}%)` },
+        xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
+        yAxis: { type: 'category', data: top.map(p => p.product).reverse(),
+                 axisLabel: { width: 150, overflow: 'truncate' } },
+        series: [{ type: 'bar', data: vals.reverse(), itemStyle: { color: color },
+                  label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
+      });
+    } else {
+      chart.setOption({
+        grid: { left: 8, right: 28, top: 16, bottom: 8, containLabel: true },
+        tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%` },
+        xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 1 },
+        yAxis: { type: 'category', data: top.map(p => p.product).reverse(),
+                 axisLabel: { width: 130, overflow: 'truncate' } },
+        series: [{ type: 'bar', data: top.map(p => p.rate).reverse(), itemStyle: { color: color },
+                  label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
+      });
+    }
   }
   const pieEl = document.getElementById('asReasonChart');
   if (pieEl) {
     const chart = echarts.init(pieEl);
     state.charts['asReasonChart'] = chart;
+    const cats = a.categories && a.categories.length ? a.categories : [];
+    const data = (cats.length ? cats : (a.reasons || [])).map(r => ({
+      name: cats.length ? r.category : r.reason, value: r.count
+    }));
     chart.setOption({
       tooltip: { trigger: 'item', formatter: p => `${p.name}<br/>${p.value} 笔 (${p.percent.toFixed(1)}%)` },
       legend: { type: 'scroll', orient: 'vertical', right: 6, top: 8, textStyle: { fontSize: 11 } },
       series: [{ type: 'pie', radius: ['38%', '66%'], center: ['36%', '52%'],
-                 data: a.reasons.map(r => ({ name: r.reason, value: r.count })),
-                 label: { show: false } }]
+                 data: data, label: { show: false } }]
     });
   }
 }
@@ -1759,33 +1820,78 @@ function renderAftersaleSummary(d) {
   const body = $('#asModalBody');
   body.classList.remove('loading');
   const ov = d.overall;
+  const ledger = d.mode === 'ledger';
+  const rateTxt = (ov.rate == null) ? '—' : (ov.rate * 100).toFixed(1) + '%';
+  const cats = d.categories && d.categories.length ? d.categories : [];
+  const shopList = d.shops || [];
+  const rt = $('#asSumRateTitle');
+  if (rt) rt.textContent = ledger ? '各平台 · 各产品售后登记量' : '各平台 · 各产品售后率';
+  const mt = $('#asSumTitle');
+  if (mt) mt.textContent = ledger
+    ? '售后 VOC 总览 · 各平台各产品售后登记量与问题分布'
+    : '售后 VOC 总览 · 各平台各产品售后率与原因分布';
+  const tt = $('#asSumTable');
+  if (tt && tt.closest('.as-card')) {
+    const h3 = tt.closest('.as-card').querySelector('h3');
+    if (h3) h3.textContent = ledger ? '各平台各产品售后登记明细' : '各平台各产品售后明细';
+  }
   $('#asSumKpis').innerHTML = `
-    <div class="as-kpi"><div class="as-kpi-v">${ov.total}</div><div class="as-kpi-l">总订单数</div></div>
-    <div class="as-kpi"><div class="as-kpi-v">${ov.aftersale}</div><div class="as-kpi-l">售后订单数</div></div>
-    <div class="as-kpi acc"><div class="as-kpi-v">${(ov.rate * 100).toFixed(1)}%</div><div class="as-kpi-l">整体售后率</div></div>
+    <div class="as-kpi"><div class="as-kpi-v">${ov.total}</div><div class="as-kpi-l">${ledger ? '售后登记条数' : '总订单数'}</div></div>
+    <div class="as-kpi"><div class="as-kpi-v">${ov.aftersale}</div><div class="as-kpi-l">${ledger ? '售后记录数' : '售后订单数'}</div></div>
+    <div class="as-kpi acc"><div class="as-kpi-v">${rateTxt}</div><div class="as-kpi-l">整体售后率</div></div>
     <div class="as-kpi"><div class="as-kpi-v">${d.datasets}</div><div class="as-kpi-l">已分析数据集</div></div>`;
-  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品</th><th>总单数</th><th>售后单数</th><th>售后率</th><th>趋势</th></tr></thead><tbody>` +
-    d.products.map(p => `<tr><td>${esc(p.platform)}</td><td>${esc(p.product)}</td><td>${p.total}</td><td>${p.aftersale}</td><td>${(p.rate * 100).toFixed(1)}%</td><td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td></tr>`).join('') + `</tbody>`;
+  const rateCell = p => (p.rate == null) ? '—' : (p.rate * 100).toFixed(1) + '%';
+  const rateBar = p => (p.rate == null) ? '' :
+    `<div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div>`;
+  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '售后率' : '售后率'}</th><th>趋势</th></tr></thead><tbody>` +
+    d.products.map(p => `<tr><td>${esc(p.platform)}</td><td>${esc(p.product)}</td><td>${p.total}</td><td>${p.aftersale}</td><td>${rateCell(p)}</td><td>${rateBar(p)}</td></tr>`).join('') + `</tbody>`;
+  if (shopList.length) {
+    const el = $('#asSumShops');
+    if (el) {
+      el.innerHTML = `<div class="as-card" style="margin-top:16px">
+        <h3>各子店铺售后分布</h3>
+        <table class="as-table">
+          <thead><tr><th>平台</th><th>子店铺</th><th>登记条数</th></tr></thead>
+          <tbody>${shopList.map(s => `<tr><td>${esc(s.platform)}</td><td>${esc(s.shop)}</td><td>${s.records}</td></tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+  }
   if (typeof echarts !== 'undefined') {
     const bar = echarts.init(document.getElementById('asSumRateChart'));
     state.charts['asSumRateChart'] = bar;
     const top = d.products.slice(0, 20);
-    bar.setOption({
-      grid: { left: 8, right: 28, top: 16, bottom: 8, containLabel: true },
-      tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%` },
-      xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 1 },
-      yAxis: { type: 'category', data: top.map(p => `${p.platform}·${p.product}`).reverse(),
-               axisLabel: { width: 170, overflow: 'truncate' } },
-      series: [{ type: 'bar', data: top.map(p => p.rate).reverse(), itemStyle: { color: '#9B27B0' },
-                label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
-    });
+    if (ledger) {
+      const total = ov.total || 1;
+      bar.setOption({
+        grid: { left: 8, right: 46, top: 16, bottom: 8, containLabel: true },
+        tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后登记 ${top[p[0].dataIndex].aftersale} 条 (${(p[0].value * 100).toFixed(1)}%)` },
+        xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
+        yAxis: { type: 'category', data: top.map(p => `${p.platform}·${p.product}`).reverse(),
+                 axisLabel: { width: 190, overflow: 'truncate' } },
+        series: [{ type: 'bar', data: top.map(p => p.aftersale / total).reverse(), itemStyle: { color: '#9B27B0' },
+                  label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
+      });
+    } else {
+      bar.setOption({
+        grid: { left: 8, right: 28, top: 16, bottom: 8, containLabel: true },
+        tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%` },
+        xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 1 },
+        yAxis: { type: 'category', data: top.map(p => `${p.platform}·${p.product}`).reverse(),
+                 axisLabel: { width: 170, overflow: 'truncate' } },
+        series: [{ type: 'bar', data: top.map(p => p.rate).reverse(), itemStyle: { color: '#9B27B0' },
+                  label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
+      });
+    }
     const pie = echarts.init(document.getElementById('asSumReasonChart'));
     state.charts['asSumReasonChart'] = pie;
+    const pieData = (cats.length ? cats : (d.reasons || [])).map(r => ({
+      name: cats.length ? r.category : r.reason, value: r.count
+    }));
     pie.setOption({
       tooltip: { trigger: 'item', formatter: p => `${p.name}<br/>${p.value} 笔 (${p.percent.toFixed(1)}%)` },
       legend: { type: 'scroll', orient: 'vertical', right: 6, top: 8, textStyle: { fontSize: 11 } },
       series: [{ type: 'pie', radius: ['38%', '66%'], center: ['36%', '52%'],
-                data: d.reasons.map(r => ({ name: r.reason, value: r.count })), label: { show: false } }]
+                 data: pieData, label: { show: false } }]
     });
   }
 }

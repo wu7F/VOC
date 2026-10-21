@@ -374,18 +374,18 @@
 <div class="modal-mask" id="asModal" hidden>
   <div class="modal as-modal">
     <div class="modal-head">
-      <span>售后 VOC 总览 · 各平台各产品售后率与原因分布</span>
+      <span id="asSumTitle">售后 VOC 总览 · 各平台各产品售后率与原因分布</span>
       <button class="icon-btn" id="asModalClose">✕</button>
     </div>
     <div class="modal-body" id="asModalBody">
       <div class="as-kpis" id="asSumKpis"></div>
       <div class="as-grid">
         <div class="as-card">
-          <h3>各平台 · 各产品售后率</h3>
+          <h3 id="asSumRateTitle">各平台 · 各产品售后分布</h3>
           <div id="asSumRateChart" class="chart-420"></div>
         </div>
         <div class="as-card">
-          <h3>售后原因分布（跨平台合并）</h3>
+          <h3 id="asSumReasonTitle">售后问题大类分布（跨平台合并）</h3>
           <div id="asSumReasonChart" class="chart-420"></div>
         </div>
       </div>
@@ -393,6 +393,7 @@
         <h3>各平台各产品售后明细</h3>
         <table class="as-table" id="asSumTable"></table>
       </div>
+      <div id="asSumShops"></div>
     </div>
   </div>
 </div>

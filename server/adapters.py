@@ -49,6 +49,28 @@ def _best_header(rows: list[list]) -> int:
     return best_i
 
 
+def _find_header_row(rows: list[list]) -> int:
+    """定位表头行。
+
+    台账类表格常见结构：前几行是**说明行**（如「考核：每日跟进…」这种长句），
+    之后才是真正的表头行。判据：
+      · 非空格数 >= 2
+      · 且**过半**的非空单元格是短词（<=10 字）—— 说明行长句会被排除
+    都不满足时退回「非空最多」。
+    """
+    def _vals(r):
+        return [str(c).strip() for c in r if c is not None and str(c).strip()]
+
+    for i, r in enumerate(rows):
+        vals = _vals(r)
+        if len(vals) < 2:
+            continue
+        short = sum(1 for v in vals if len(v) <= 10)
+        if short * 2 > len(vals):
+            return i
+    return _best_header(rows)
+
+
 def _make_cols(hdr: list) -> list[str]:
     """生成去重后的列名。"""
     seen: dict[str, int] = {}
@@ -86,7 +108,7 @@ def _pick_sheet(wb, names: list[str]) -> str:
             buf.append(list(row))
         if not buf:
             continue
-        score = sum(1 for c in buf[_best_header(buf)] if c is not None and str(c).strip())
+        score = sum(1 for c in buf[_find_header_row(buf)] if c is not None and str(c).strip())
         if score > best_score:
             best_score, best_name = score, sn
     return best_name
@@ -128,7 +150,7 @@ def _read_xlsx(path: Path) -> tuple[list[dict], str]:
         wb.close()
         raise ValueError(f"{path.name}#{chosen} 中没有数据")
 
-    hi = _best_header(head_buf)
+    hi = _find_header_row(head_buf)
     cols = _make_cols(head_buf[hi])
     if len(cols) < 2:
         wb.close()
@@ -155,11 +177,76 @@ def _read_xlsx(path: Path) -> tuple[list[dict], str]:
     return rows, src
 
 
-def read_table(path: str | Path) -> tuple[list[dict], str]:
-    """统一读表入口，返回 (行列表, 来源描述)。"""
+def _sheet_rows(ws, sheet_name: str) -> list[dict]:
+    """流式读取单个 sheet：定位表头行 + 读全表，返回行字典列表。"""
+    it = ws.iter_rows(values_only=True)
+
+    head_buf: list[list] = []
+    for _ in range(_HEADER_SCAN_ROWS):
+        try:
+            head_buf.append(list(next(it)))
+        except StopIteration:
+            break
+    if not head_buf:
+        return []
+    hi = _find_header_row(head_buf)
+    cols = _make_cols(head_buf[hi])
+    if len(cols) < 2:
+        return []
+
+    rows: list[dict] = []
+    for raw in head_buf[hi + 1:]:
+        d = _row_to_dict(raw, cols)
+        if d:
+            rows.append(d)
+    for raw in it:
+        if len(rows) >= MAX_TABLE_ROWS:
+            break
+        d = _row_to_dict(list(raw), cols)
+        if d:
+            rows.append(d)
+    return rows
+
+
+def _read_xlsx_multi(path: Path) -> tuple[list[dict], str]:
+    """读取 xlsx 的**全部业务 sheet** 并合并（售后 VOC 台账用）。
+
+    - 跳过 WPS 保留表（WpsReserved_*）和空表
+    - 各 sheet 表头不同也没关系：行是 dict，列名取并集后各自保留自己的键
+    - 表头行自动定位（说明行/空行在前也能找对）
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    names = [n for n in wb.sheetnames if not n.lower().startswith("wpsreserved")]
+    merged: list[dict] = []
+    used: list[str] = []
+    for sn in names:
+        try:
+            rows = _sheet_rows(wb[sn], sn)
+        except Exception:
+            continue
+        if rows:
+            merged.extend(rows)
+            used.append(f"{path.name}#{sn}({len(rows)}行)")
+    wb.close()
+    if not merged:
+        raise ValueError(f"{path.name} 中没有读到任何数据行")
+    return merged, " + ".join(used)
+
+
+def read_table(path: str | Path, multi_sheet: bool = False) -> tuple[list[dict], str]:
+    """统一读表入口，返回 (行列表, 来源描述)。
+
+    multi_sheet=True 时（售后 VOC 用）：xlsx 的**所有业务 sheet** 都会读进来并
+    合并成一份行列表，各 sheet 表头取并集（列名不同的 sheet 各自保留自己的键）。
+    WPS 生成的保留表（WpsReserved_*）会被跳过。
+    """
     p = Path(path)
     suf = p.suffix.lower()
     if suf in (".xlsx", ".xlsm", ".xls"):
+        if multi_sheet:
+            return _read_xlsx_multi(p)
         return _read_xlsx(p)
     if suf in (".jsonl", ".ndjson"):
         rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -173,9 +260,36 @@ def read_table(path: str | Path) -> tuple[list[dict], str]:
             return [data], p.name
         return data, p.name
     # CSV / TSV（容忍 BOM）
-    text = p.read_text(encoding="utf-8-sig", errors="replace")
+    return _read_csv(p)
+
+
+def _read_csv(path: Path) -> tuple[list[dict], str]:
+    """读取 CSV/TSV。
+
+    与 xlsx 路径保持一致的行为：
+      · 跳过全空行
+      · 首行若不是有效表头（如前面有说明行/空行），自动定位真正的表头行
+    """
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    suf = path.suffix.lower()
     delim = "\t" if (suf == ".tsv" or text.count("\t") > text.count(",")) else ","
-    return list(csv.DictReader(io.StringIO(text), delimiter=delim)), p.name
+    rows = list(csv.reader(io.StringIO(text), delimiter=delim))
+    if not rows:
+        return [], path.name
+
+    def _nonnull(r):
+        return sum(1 for c in r if c is not None and str(c).strip())
+
+    hi = _find_header_row(rows[:_HEADER_SCAN_ROWS])
+    if _nonnull(rows[hi]) < 2:
+        hi = 0
+    cols = _make_cols(rows[hi])
+    out: list[dict] = []
+    for raw in rows[hi + 1:]:
+        d = _row_to_dict(raw, cols)
+        if d:
+            out.append(d)
+    return out, path.name
 
 
 # ---------------------------------------------------------------------------
