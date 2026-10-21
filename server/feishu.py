@@ -140,7 +140,8 @@ def _explain(code, msg: str) -> str:
             "应用没有这张表格的访问权限。请在飞书里打开该表格 → 右上角「分享」→"
             "「添加协作者」→ 搜索你的应用名称 → 添加后重试。\n"
             "原始报错：%s" % m[:180])
-    if code in (99991661, 99991665) or "app_id" in low or "app_secret" in low:
+    if code in (99991661, 99991665, 10003, 10014) or "app_id" in low or "app_secret" in low \
+            or "invalid param" in low:
         return (
             "app_id / app_secret 不正确，或应用未发布到本企业。请到飞书开放平台 →"
             "应用 → 凭证与基础信息 里核对，并确认「版本管理与发布」已通过。\n"

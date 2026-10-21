@@ -184,10 +184,12 @@ MAX_UPLOAD_BYTES = int(os.environ.get("VOC_MAX_UPLOAD_MB", "200")) * 1024 * 1024
 
 @app.exception_handler(Exception)
 async def unhandled(request: Request, exc: Exception):
-    """对外只给一句话，不泄漏绝对路径 / 堆栈；完整信息写终端与日志。"""
+    """对外只给一句话（带异常类型与脱敏消息，便于自查），完整堆栈写终端与日志。"""
     tb = traceback.format_exc()
     print(f"[VOC] 未处理异常 {request.url.path}:\n{tb}", file=sys.stderr)
-    return JSONResponse({"detail": "服务内部错误，请查看服务端日志"}, status_code=500)
+    brief = _public_error(exc)
+    detail = "服务内部错误（%s）：%s" % (type(exc).__name__, brief)
+    return JSONResponse({"detail": detail}, status_code=500)
 
 PLATFORMS = [
     {
@@ -711,13 +713,23 @@ def _feishu_creds(app_id: str = "", app_secret: str = "") -> tuple[str, str, str
     return aid, sec, src
 
 
-def _aftersale_columns(headers: list[str]) -> dict:
-    """用售后管线的同一套别名规则预判列是否可识别（供前端提示）。"""
-    return {
-        "product": aftersale_module._pick_column(headers, "product") or "",
-        "flag": aftersale_module._pick_column(headers, "flag") or "",
-        "reason": aftersale_module._pick_column(headers, "reason") or "",
-    }
+def _aftersale_columns(headers: list[str], rows: list[dict] | None = None) -> dict:
+    """用售后管线的同一套逻辑预判列（供飞书预览提示）。
+
+    必须传真实 rows —— 因为 flag 列是按「售后语义可判定率」择优的，
+    只看表头名会得出和正式分析不一致的结论（预览会误导人）。
+    """
+    if rows:
+        d = aftersale_module.detect_columns(rows)
+        return {
+            "product": (d.get("product") or [""])[0],
+            "flag": (d.get("flag") or [""])[0],
+            "reason": (d.get("reason") or [""])[0],
+            "shop": (d.get("shop") or [""])[0],
+            "mode": d.get("mode", ""),
+            "flag_candidates": d.get("flag_candidates") or [],
+        }
+    return {"product": "", "flag": "", "reason": "", "shop": "", "mode": ""}
 
 
 @app.get("/api/feishu/config")
@@ -943,7 +955,7 @@ def api_feishu_pull(req: FeishuPullReq):
             "headers": headers,
             "preview": preview,
             "cred_source": src,
-            "columns": _aftersale_columns(headers),
+            "columns": _aftersale_columns(headers, rows),
         }
 
     # 正式分析

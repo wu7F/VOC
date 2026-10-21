@@ -193,6 +193,70 @@ def _classify_row(row: dict, cols: dict) -> tuple[str, bool | None]:
     return product, _is_aftersale(flag)
 
 
+def assign_roles(headers: list[str], rows: list[dict]) -> dict:
+    """列角色分配（与正式分析完全同一套逻辑，预览也用它，保证口径一致）。
+
+    关键：一个列只能承担一个角色，且要按「售后语义可判定率」择优 ——
+    「类型」列在亚马逊台账里装的是**店铺名**（行善/香港店/威卡斯…），
+    若直接当售后标志会把 800+ 行全判成"非售后"。
+    """
+    flag_cands = _pick_columns(headers, "flag")
+    scored: list[tuple[float, str, int, int]] = []
+    for c in flag_cands:
+        judged, yes, n = _decidability(c, rows)
+        if n < 3:
+            continue
+        ratio = judged / n
+        # 判为售后的比例也要有区分度：全是"是"或全是"否"都不能区分
+        spread = min(yes, n - yes) / n
+        scored.append((ratio * 0.6 + spread * 0.4, c, judged, n))
+    scored.sort(reverse=True)
+    flag_primary = ""
+    flag_trusted = False
+    if scored:
+        best_score, best_col, best_judged, best_n = scored[0]
+        if best_judged >= 3 and best_judged / max(1, best_n) >= 0.3:
+            flag_primary = best_col
+            flag_trusted = True
+    # 覆盖率：该列有值的行占全部行数的比例。偏低说明只有部分 sheet 有这列
+    flag_cov = 0.0
+    if flag_primary:
+        with_flag = sum(1 for r in rows if (r.get(flag_primary) or "").strip())
+        flag_cov = with_flag / max(1, len(rows))
+
+    used = {flag_primary} if flag_primary else set()
+    reason_cols = _pick_columns(headers, "reason", exclude=used)
+    used |= set(reason_cols)
+    shop_cols = _pick_columns(headers, "shop", exclude=used)
+    used |= set(shop_cols)
+    product_cols = _pick_columns(headers, "product", exclude=used)
+
+    # 明细模式要求 flag 列几乎覆盖所有行；否则"没填 flag"不等于"不是售后"
+    mode = "detail" if (flag_trusted and flag_cov >= 0.9) else "ledger"
+    return {
+        "product": product_cols,
+        "flag": [flag_primary] if flag_primary else [],
+        "reason": reason_cols,
+        "shop": shop_cols,
+        "mode": mode,
+        "flag_trusted": flag_trusted,
+        "flag_cov": round(flag_cov, 3),
+        "flag_candidates": flag_cands,
+    }
+
+
+def detect_columns(rows: list[dict]) -> dict:
+    """供飞书预览用：只做列角色判定，不跑分析。"""
+    headers: list[str] = []
+    for r in rows:
+        for k in r.keys():
+            if k not in headers:
+                headers.append(k)
+    out = assign_roles(headers, rows)
+    out["headers"] = headers
+    return out
+
+
 def run_aftersale(*, files: list[Path], platform: str, category: str,
                   out_dir: Path, progress=None, data_dir=None) -> dict:
     def p(pct: int, msg: str) -> None:
@@ -218,54 +282,22 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             if k not in headers:
                 headers.append(k)
 
-    # ---- 列角色分配 ----------------------------------------------------
-    # 一个列只能承担一个角色，且要按「售后语义可判定率」择优：
-    #   「类型」列在亚马逊台账里装的是**店铺名**（行善/香港店/威卡斯…），
-    #   若直接当售后标志会把 800+ 行全判成"非售后"。
-    flag_cands = _pick_columns(headers, "flag")
-    scored: list[tuple[float, str, int, int]] = []
-    for c in flag_cands:
-        judged, yes, n = _decidability(c, all_rows)
-        if n < 3:
-            continue
-        ratio = judged / n
-        # 判为售后的比例也要有区分度：全是"是"或全是"否"都不能区分
-        spread = min(yes, n - yes) / n
-        scored.append((ratio * 0.6 + spread * 0.4, c, judged, n))
-    scored.sort(reverse=True)
-    flag_primary = ""
-    flag_trusted = False
-    if scored:
-        best_score, best_col, best_judged, best_n = scored[0]
-        # 至少 30% 的取值能判出语义，且有区分度 → 认定为可靠的售后标志列
-        if best_judged >= 3 and best_judged / max(1, best_n) >= 0.3:
-            flag_primary = best_col
-            flag_trusted = True
-    # 覆盖率：该列有值的行占全部行数的比例。偏低说明这份数据里只有部分 sheet
-    # 才有这列（如多 sheet 台账合并），不能当成"每行都有售后标志"。
-    flag_cov = 0.0
-    if flag_primary:
-        with_flag = sum(1 for r in all_rows if (r.get(flag_primary) or "").strip())
-        flag_cov = with_flag / max(1, len(all_rows))
-
-    used = {flag_primary} if flag_primary else set()
-    reason_cols = _pick_columns(headers, "reason", exclude=used)
-    used |= set(reason_cols)
-    shop_cols = _pick_columns(headers, "shop", exclude=used)
-    used |= set(shop_cols)
-    product_cols = _pick_columns(headers, "product", exclude=used)
+    # ---- 列角色分配（与预览共用同一套逻辑）-----------------------------
+    roles = assign_roles(headers, all_rows)
+    cols = {k: roles[k] for k in ("product", "flag", "reason", "shop")}
+    mode = roles["mode"]
+    flag_primary = cols["flag"][0] if cols["flag"] else ""
+    flag_trusted = roles["flag_trusted"]
+    flag_cov = roles["flag_cov"]
+    flag_cands = roles["flag_candidates"]
+    reason_cols = cols["reason"]
+    shop_cols = cols["shop"]
+    product_cols = cols["product"]
     if not product_cols:
         raise ValueError(
             "未能识别「产品」列。\n"
             "请确认表头包含类似：产品名 / ASIN / SKU / 型号 之类列。\n"
             f"当前识别到的列：{headers[:16]}")
-
-    cols = {
-        "product": product_cols,
-        "flag": [flag_primary] if flag_primary else [],
-        "reason": reason_cols,
-        "shop": shop_cols,
-    }
 
     # ---- 判定模式 -------------------------------------------------------
     # 明细模式（可算率）：有**可靠**的 flag 列，且它几乎覆盖了所有行
@@ -273,7 +305,6 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
     #      "没填 flag 值" 不等于 "不是售后"，算出来的率会误导。
     # 台账模式（不算率）：每行视作 1 条已发生的售后记录。
     #   若存在可靠的 flag 列，仍用它剔除**明确**标注为非售后的行。
-    mode = "detail" if (flag_trusted and flag_cov >= 0.9) else "ledger"
     warnings: list[str] = []
     if mode == "ledger":
         if not flag_trusted and flag_cands:

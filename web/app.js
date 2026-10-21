@@ -1580,16 +1580,19 @@ async function fsPreview() {
     const cols = d.columns || {};
     const miss = [];
     if (!cols.product) miss.push('产品');
-    if (!cols.flag) miss.push('是否售后');
     if (miss.length) {
-      fsNote(`已读到 ${d.row_count} 行，但未能识别「${miss.join('、')}」列 —— 将按台账模式处理（不算售后率）`, true);
+      fsNote(`已读到 ${d.row_count} 行，但未能识别「${miss.join('、')}」列 —— 无法生成售后分析，请检查表头命名`, true);
+      $('#btnFsStart').disabled = true;
     } else {
       const reasonTxt = cols.reason
         ? `售后原因=「${cols.reason}」`
-        : '未识别到「售后原因」列（原因将归为「未注明原因」）';
-      fsNote(`已读到 ${d.row_count} 行 · 产品=「${cols.product}」 是否售后=「${cols.flag}」 ${reasonTxt}`);
+        : '未识别到「售后原因」列（原因会归为「未注明原因」）';
+      const modeTxt = cols.mode === 'detail'
+        ? `口径：明细模式（能算售后率，售后标志=「${cols.flag}」）`
+        : `口径：台账模式（不算售后率${cols.flag ? `，「${cols.flag}」只覆盖部分记录` : '，没有「是否售后」列'}）`;
+      fsNote(`已读到 ${d.row_count} 行 · 来源 ${d.source || d.kind} · 产品=「${cols.product}」 ${reasonTxt} · ${modeTxt}`);
+      $('#btnFsStart').disabled = false;
     }
-    $('#btnFsStart').disabled = false;
   } catch (e) {
     fsNote('读取失败：' + e.message, true);
   } finally {
