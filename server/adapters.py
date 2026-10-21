@@ -53,22 +53,41 @@ def _find_header_row(rows: list[list]) -> int:
     """定位表头行。
 
     台账类表格常见结构：前几行是**说明行**（如「考核：每日跟进…」这种长句），
-    之后才是真正的表头行。判据：
-      · 非空格数 >= 2
-      · 且**过半**的非空单元格是短词（<=10 字）—— 说明行长句会被排除
-    都不满足时退回「非空最多」。
+    之后才是真正的表头行；而有些平台（Wayfair）导出的表头名字很长
+    （`Supplier part number` / `Review text`），数据行里却全是日期、评分、
+    店铺名这类短值 —— 只看「短词比例」会把**数据行当成表头**。
+
+    综合三项判据，取第一个达标的行：
+      · 列数完整度 —— 非空数 >= 整表最大非空数的一半（说明行往往只有 1-2 个格子）
+      · short_ratio —— 短词（<=12 字）占比，表头多为简短名词短语
+      · long_pen    —— 长文本（>=30 字）惩罚，说明句 / 评论正文会拉低分数
+    达标线：列数够完整 + short_ratio >= 0.5 + 该行没有任何长文本。
     """
     def _vals(r):
         return [str(c).strip() for c in r if c is not None and str(c).strip()]
 
-    for i, r in enumerate(rows):
+    sample = rows[:15]
+    counts = [len(_vals(r)) for r in sample]
+    max_nn = max(counts) if counts else 0
+    if max_nn < 2:
+        return _best_header(rows)
+    min_nn = max(2, int(max_nn * 0.5))   # 表头行应该列数比较完整
+
+    best_i, best_score = _best_header(rows), -9.9
+    for i, r in enumerate(sample):
         vals = _vals(r)
-        if len(vals) < 2:
-            continue
-        short = sum(1 for v in vals if len(v) <= 10)
-        if short * 2 > len(vals):
+        if len(vals) < min_nn:
+            continue                      # 说明句 / 残行：非空太少
+        short = sum(1 for v in vals if len(v) <= 12)
+        ratio = short / len(vals)
+        long_cnt = sum(1 for v in vals if len(v) >= 30)
+        score = ratio - min(1.0, long_cnt / len(vals) * 2) * 0.8
+        if score > best_score:
+            best_score, best_i = score, i
+        # 表头通常就在前面，第一个达标就返回（避免把后面的数据行当表头）
+        if ratio >= 0.5 and long_cnt == 0:
             return i
-    return _best_header(rows)
+    return best_i
 
 
 def _make_cols(hdr: list) -> list[str]:
