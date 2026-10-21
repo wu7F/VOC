@@ -38,6 +38,7 @@ const REC_SECTION_FULL = '概览 / 六维分析 / 功能体验 / 人群与交叉
 const state = {
   platforms: [],
   platform: 'Amazon',
+  group: '产品VOC',
   view: 'setup',     // setup | progress | result | records
   datasets: [],
   current: null,     // 当前数据集记录
@@ -196,6 +197,9 @@ async function fetchAuthStatus() {
 async function boot() {
   const { platforms } = await (await api('/api/platforms')).json();
   state.platforms = platforms;
+  const _first = platforms.find(p => p.id === state.platform) || platforms[0];
+  state.group = _first ? (_first.group || '其他') : '其他';
+  renderPlatformGroups();
   renderPlatformTabs();
   bindSetupEvents();
   bindResultEvents();
@@ -493,13 +497,41 @@ function onHashChange() {
   if (target && target !== state.tab && state.result) switchTab(target);
 }
 
+function renderPlatformGroups() {
+  const seen = [];
+  state.platforms.forEach(p => { const g = p.group || '其他'; if (!seen.includes(g)) seen.push(g); });
+  $('#platformGroups').innerHTML = seen.map(g =>
+    `<button data-g="${esc(g)}" class="${g === state.group ? 'active' : ''}">${esc(g)}</button>`
+  ).join('');
+  $$('#platformGroups button').forEach(b => {
+    b.onclick = () => applyGroup(b.dataset.g);
+  });
+}
+
 function renderPlatformTabs() {
-  $('#platformTabs').innerHTML = state.platforms.map(p =>
-    `<button data-p="${esc(p.id)}" class="${p.id === state.platform ? 'active' : ''}">${esc(p.name)}</button>`
+  const kids = state.platforms.filter(p => (p.group || '其他') === state.group);
+  $('#platformTabs').innerHTML = kids.map(p =>
+    `<button data-p="${esc(p.id)}" class="${p.id === state.platform ? 'active' : ''}">${esc(p.label_cn || p.name)}</button>`
   ).join('');
   $$('#platformTabs button').forEach(b => {
     b.onclick = () => { state.platform = b.dataset.p; applyPlatform(state.platform); };
   });
+}
+
+function applyGroup(g) {
+  state.group = g;
+  const kids = state.platforms.filter(p => (p.group || '其他') === g);
+  if (kids.length) state.platform = kids[0].id;
+  renderPlatformGroups();
+  renderPlatformTabs();
+  applyPlatform(state.platform);
+}
+
+function syncGroupFromPlatform() {
+  const p = state.platforms.find(x => x.id === state.platform);
+  if (p && p.group) state.group = p.group;
+  renderPlatformGroups();
+  renderPlatformTabs();
 }
 
 function applyPlatform(pid) {
@@ -1021,11 +1053,10 @@ function renderPlatformSubTabs() {
     b.onclick = () => {
       const pid = b.dataset.pid;
       if (pid === '__all__') state.recScope = 'all';
-      else { state.recScope = 'platform'; state.platform = pid; applyPlatformTexts(pid); }
+      else { state.recScope = 'platform'; state.platform = pid; syncGroupFromPlatform(); applyPlatformTexts(pid); }
       state.dsFilter = 'all';
       state.recQuery = '';
       const qi = $('#recQuery'); if (qi) qi.value = '';
-      $$('#platformTabs button').forEach(x => x.classList.toggle('active', x.dataset.p === state.platform));
       renderDatasets();
       renderRecordsBoard();
     };
@@ -1382,7 +1413,7 @@ async function openDataset(id) {
   const rec = await (await api(`/api/datasets/${id}`)).json();
   state.current = rec;
   state.platform = rec.platform;
-  $$('#platformTabs button').forEach(b => b.classList.toggle('active', b.dataset.p === rec.platform));
+  syncGroupFromPlatform();
   applyPlatformTexts(rec.platform);
   renderDemos();
   renderDatasets();
