@@ -119,6 +119,38 @@ def parse_feishu_url(raw: str) -> dict:
 
 # ---------------------------------------------------------------- HTTP
 
+def _explain(code, msg: str) -> str:
+    """把飞书的天书报错翻译成能照着做的中文提示。"""
+    m = str(msg or "")
+    low = m.lower()
+    if "scope" in low or "access denied" in low or code in (99991672, 99991679):
+        return (
+            "飞书应用权限不足。请到飞书开放平台 → 你的应用 → **权限管理**，开通并"
+            "**发布版本**后重试：\n"
+            "  · sheets:spreadsheet:readonly   读电子表格\n"
+            "  · bitable:app:readonly          读多维表格\n"
+            "  · wiki:wiki:readonly            读知识库里的表格\n"
+            "  · drive:drive:readonly + drive:file:download   读云空间文件\n"
+            "（只申请不发版，权限不会生效）\n"
+            "⚠ 如果你填的是某个工具/别人给你的 app_id，请换成**你自己**在飞书开放平台"
+            "创建的应用 —— 别人应用的权限配置你改不了，永远会卡在这一步。\n"
+            "原始报错：%s" % m[:180])
+    if code in (99991663, 99991664) or "permission" in low or "forbidden" in low:
+        return (
+            "应用没有这张表格的访问权限。请在飞书里打开该表格 → 右上角「分享」→"
+            "「添加协作者」→ 搜索你的应用名称 → 添加后重试。\n"
+            "原始报错：%s" % m[:180])
+    if code in (99991661, 99991665) or "app_id" in low or "app_secret" in low:
+        return (
+            "app_id / app_secret 不正确，或应用未发布到本企业。请到飞书开放平台 →"
+            "应用 → 凭证与基础信息 里核对，并确认「版本管理与发布」已通过。\n"
+            "原始报错：%s" % m[:180])
+    if "not found" in low or code == 131006:
+        return (
+            "找不到这个表格（可能已删除，或分享链接不完整）。\n原始报错：%s" % m[:180])
+    return "飞书接口返回错误（code=%s）：%s" % (code, m[:220])
+
+
 def _http_json(url: str, *, method: str = "GET", body: dict | None = None,
                headers: dict | None = None, timeout: int = 30) -> dict:
     data = None
@@ -136,9 +168,11 @@ def _http_json(url: str, *, method: str = "GET", body: dict | None = None,
             raw = e.read().decode("utf-8", "ignore")
             j = json.loads(raw)
             msg = j.get("msg") or raw[:200]
+            code = j.get("code")
         except Exception:
             msg = "HTTP %s" % e.code
-        raise FeishuError("飞书接口返回错误：%s" % msg)
+            code = None
+        raise FeishuError(_explain(code, msg))
     except urllib.error.URLError as e:
         raise FeishuError("无法连接飞书服务器：%s" % (e.reason,))
     except Exception as e:
@@ -149,7 +183,7 @@ def _http_json(url: str, *, method: str = "GET", body: dict | None = None,
     except Exception:
         raise FeishuError("飞书返回了非 JSON 内容（可能被网关拦截）：%s" % raw[:200])
     if j.get("code") not in (0, None):
-        raise FeishuError("飞书接口报错(%s)：%s" % (j.get("code"), j.get("msg")))
+        raise FeishuError(_explain(j.get("code"), j.get("msg")))
     return j
 
 

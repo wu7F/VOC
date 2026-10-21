@@ -557,9 +557,12 @@ async function openAftersaleOverview() {
         if (rec && rec.status === 'done') { await openDataset(src.dataset_id); return; }
       }
     }
-    // 2) 退回到该平台最新的一份已完成报告
+    // 2) 退回到售后平台里最新的一份已完成报告
+    //    注意：必须限定在售后平台（kind='aftersale'），否则会把产品VOC 的报告
+    //    也当成候选，打开后 openDataset 又把顶栏切回「产品VOC」，看起来像"乱跳"。
+    const asPids = state.platforms.filter(p => p.kind === 'aftersale').map(p => p.id);
     const cand = state.datasets
-      .filter(d => d.status === 'done' && d.platform !== 'WayfairCs')
+      .filter(d => d.status === 'done' && asPids.includes(d.platform))
       .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     if (cand.length) { await openDataset(cand[0].id); return; }
     // 3) 都没有 → 显示空态引导（飞书源配置）
@@ -1677,6 +1680,7 @@ async function openDataset(id) {
   state.platform = rec.platform;
   syncGroupFromPlatform();
   applyPlatformTexts(rec.platform);
+  updateFeishuUI();          // 打开数据集会切平台，飞书卡片必须跟着显示/隐藏
   renderDemos();
   renderDatasets();
 
