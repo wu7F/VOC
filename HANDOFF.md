@@ -147,13 +147,61 @@
 
 ---
 
+## 3.7 售后 VOC 的三个核心改造（SKU 合并 / 总看板 / 飞书数据源）
+
+### ① 平台总看板
+点顶部**「售后VOC」父板块**直接进入 **Amazon 平台总的售后看板**，不再显示「新建分析」表单。
+落地逻辑（`web/app.js::openAftersaleOverview`）：
+1. 飞书数据源优先：若已到期 → 先同步再展示（保证看到的是最新数据）
+2. 退回到该平台最新一份已完成报告
+3. 都没有 → 显示空态，引导配置飞书数据源
+
+### ② SKU 合并（`server/sku_merge.py`）
+同一产品的 SKU 常有几十种写法（颜色/材质/规格/批次后缀不同），单独统计无意义。
+归族规则：**剥品牌前缀**（`YJMR / YJSR / MR / SR / SRYJ / NPSR / YJPWSR …`）
+→ 取**型号段**（字母0-3 + 数字2-6）→ 族键 = `品牌-型号`。
+
+实测（亚马逊售后台账 519 个 SKU）：→ **132 个产品族**，90 个合并组覆盖 **98%** 记录。
+例：`MR-221118` 一族合并了 31 个变体
+（`MR221118BR-WKS` / `MR221118-BR-MJT-BJ-1` / `MR221118BR-wks-x` / `04-MR221118BR-ZJ` …）。
+
+- `products[]` 新增 `sku_count`（合并了几个 SKU）与 `members`（成员 SKU 及各自条数），看板可展开查看
+- **手工覆盖**：在 `data/sku_merge.json` 写 `{"某个SKU": "目标族名"}` 可指定归族；
+  写 `null` 可把它从任何族里拆出来；`_brands` 键可覆盖品牌前缀表
+- 注意：**已移除子店铺维度**（`shops[]` 及看板子店铺表），只合计总的
+
+### ③ 飞书数据源自动更新（`server/feishu_sources.py`）
+一个「数据源」= 一张飞书表格 + 目标平台 + 同步间隔，持久化在 `data/feishu_sources.json`。
+
+同步流程：拉飞书 → 写 CSV → **复用同一个 dataset id** 重跑分析 → 更新看板。
+（dataset id 不变 → 看板链接稳定，内容随表格刷新，无需再上传文件。）
+
+| API | 作用 |
+|---|---|
+| `GET /api/feishu/sources` | 列出数据源 + 凭证是否已配 |
+| `POST /api/feishu/sources` | 新建数据源（并立即同步一次） |
+| `PATCH /api/feishu/sources/{id}` | 改配置（名称/链接/平台/间隔/是否自动） |
+| `DELETE /api/feishu/sources/{id}` | 删除数据源（历史报告保留） |
+| `POST /api/feishu/sources/{id}/sync` | 立即同步 |
+
+前端：数据源列表（状态 / 上次同步 / 立即同步 / 删除），点父板块进看板时若到期会先同步。
+
+**凭证**：飞书**自建应用**的 app_id / app_secret。
+优先级：环境变量 `VOC_FEISHU_APP_ID` / `VOC_FEISHU_APP_SECRET` > `data/feishu_config.json`（网页上填一次）。
+需要权限 `sheets:spreadsheet:readonly`（电子表格）或 `bitable:app:readonly`（多维表格），
+并把目标表格授权给该应用。
+
+---
+
 ## 4. 代码结构
 
 ```
 server/           后端（FastAPI）
   app.py          入口路由 + PLATFORMS 定义 + 任务调度（_run_job / _run_aftersale_job）
   aftersale.py    售后独立聚合管线（新增）
+  sku_merge.py    SKU 归族（高度相似写法合并成产品族）
   feishu.py       飞书表格数据源（电子表格/多维表格 → CSV）
+  feishu_sources.py 飞书数据源管理 + 自动同步
   store.py        数据集存储（注意：锁是模块级 _LOCK，不是实例属性）
   auth.py         邮箱账号制登录、限流（8 次错锁 5 分钟）
   pipeline.py     评论洞察管线
