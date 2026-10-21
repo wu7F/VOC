@@ -540,7 +540,7 @@ async function openAftersaleOverview() {
     const fs = await (await api('/api/feishu/sources')).json();
     state.feishuSources = fs.sources || [];
     state.feishuCred = fs;
-    const src = state.feishuSources.find(s => s.dataset_id && s.platform !== 'WayfairCs');
+    const src = state.feishuSources.find(s => s.platform !== 'WayfairCs');
     if (src) {
       const last = src.last_sync_at ? (Date.now() / 1000 - src.last_sync_at) / 60 : 1e9;
       const iv = src.interval_min || 30;
@@ -552,9 +552,10 @@ async function openAftersaleOverview() {
         });
         await loadDatasets();
       }
+      // 直接打开（openDataset 自己会处理 running/error 状态），
+      // 不要依赖 state.datasets —— 它可能还没加载完，会导致"进来看不到看板"
       if (src.dataset_id) {
-        const rec = state.datasets.find(d => d.id === src.dataset_id);
-        if (rec && rec.status === 'done') { await openDataset(src.dataset_id); return; }
+        try { await openDataset(src.dataset_id); return; } catch (e) { /* 落到下面 */ }
       }
     }
     // 2) 退回到售后平台里最新的一份已完成报告
@@ -607,6 +608,7 @@ function applyPlatformTexts(pid) {
   $('#setupDesc').textContent = p.desc + '。平台将自动完成适配 → 标注 → 聚合 → 报告。';
   $('#uploadHint').textContent = p.hint || '';
   $('#fieldCommentLimit').hidden = (p.kind !== 'forum');
+  applySetupTitle(pid);      // 售后板块改用「售后 VOC」语境，不显示"新建分析"
 }
 
 /* ============================ 分析引擎 ============================ */
@@ -1891,8 +1893,36 @@ function bindAftersaleUI() {
 }
 
 function updateGroupUI() {
+  const isAs = state.group === '售后VOC';
   const btn = $('#btnAsSummary');
-  if (btn) btn.hidden = (state.group !== '售后VOC');
+  if (btn) btn.hidden = !isAs;
+
+  // 售后 VOC 的数据来自飞书数据源，不需要「新建分析 / 上传文件」那一套
+  const hide = el => { if (el) el.hidden = isAs; };
+  hide($('#btnNew'));           // 左侧「+ 新建分析」
+  hide($('#cardUpload'));       // 1 · 上传数据
+  hide($('#cardConfig'));       // 2 · 分析配置
+  hide($('#demoCard'));         // 「或者，先看一份示例」——售后靠飞书源，不需要
+  const startBtn = $('#btnStart');
+  if (startBtn) startBtn.hidden = isAs;   // 「开始分析」（飞书卡片有自己的同步按钮）
+  const recNew = $('#recNewAnalysis');
+  if (recNew) recNew.hidden = isAs;
+}
+
+/** 售后板块的标题文案（不进「新建分析」语境） */
+function applySetupTitle(pid) {
+  const p = state.platforms.find(x => x.id === pid);
+  if (!p) return;
+  const isAs = p.kind === 'aftersale';
+  const t = $('#setupTitle'), d = $('#setupDesc');
+  if (!t || !d) return;
+  if (isAs) {
+    t.textContent = `${p.label_cn} · 售后 VOC`;
+    d.textContent = '售后数据由飞书表格自动同步，看板随表格更新，无需手动上传文件。';
+  } else {
+    t.textContent = `${p.label_cn} · 新建 VOC 分析`;
+    d.textContent = p.desc + '。平台将自动完成适配 → 标注 → 聚合 → 报告。';
+  }
 }
 
 async function openAftersaleSummary() {
@@ -3130,6 +3160,13 @@ async function probePdfEngine() {
 
 /* ---------- 演示数据 ---------- */
 async function renderDemos() {
+  // 售后 VOC 靠飞书数据源，不展示「示例数据 / 上传数据文件」这一块
+  const cur = state.platforms.find(x => x.id === state.platform);
+  if (cur && cur.kind === 'aftersale') {
+    const c = $('#demoCard');
+    if (c) c.hidden = true;
+    return;
+  }
   try {
     const { demos } = await (await api('/api/demo')).json();
     const mine = (demos || []).filter(d => d.platform === state.platform);
