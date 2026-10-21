@@ -27,6 +27,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from . import adapters
+
 _OPEN = "https://open.feishu.cn/open-apis"
 _TOKEN_TTL = 5400  # 飞书 token 有效期 2h，这里留 30 分钟余量
 
@@ -194,8 +196,45 @@ def _sheets_of(token: str, spreadsheet_token: str) -> list[dict]:
     return (j.get("data") or {}).get("sheets") or []
 
 
+def _sheet_values(token: str, spreadsheet_token: str, sheet_id: str) -> list[list]:
+    """读单个 sheet 的全部数据（二维数组，行长度已补齐）。"""
+    rng = urllib.parse.quote(sheet_id, safe="")
+    j = _http_json(
+        "%s/sheets/v2/spreadsheets/%s/values/%s" % (_OPEN, spreadsheet_token, rng),
+        headers={"Authorization": "Bearer " + token},
+    )
+    values = ((j.get("data") or {}).get("valueRange") or {}).get("values") or []
+    width = max((len(r) for r in values), default=0)
+    return [list(r) + [""] * (width - len(r)) for r in values]
+
+
+def _rows_from_values(values: list[list]) -> tuple[list[str], list[dict]]:
+    """二维数组 → (表头, 行dict列表)。表头行自动定位（跳过说明行）。"""
+    if not values:
+        return [], []
+    hi = adapters.find_header_row(values[:15])
+    cols = adapters.make_cols(values[hi])
+    rows: list[dict] = []
+    for raw in values[hi + 1:]:
+        d = adapters.row_to_dict(list(raw), cols)
+        if d:
+            rows.append(d)
+    # 丢掉「整列都是空」的自动生成列名（col9 / col16…，飞书补齐空列时产生）
+    keep = []
+    for i, c in enumerate(cols):
+        if c and not re.match(r"^col\d+$", c):
+            keep.append(c)
+        elif c and any((r.get(c) or "").strip() for r in rows):
+            keep.append(c)
+    keep_set = set(keep)
+    if len(keep) != len(cols):
+        rows = [{k: v for k, v in r.items() if k in keep_set} for r in rows]
+        cols = keep
+    return [c for c in cols if c and c.strip()], rows
+
+
 def fetch_sheets_rows(token: str, spreadsheet_token: str, sheet_id: str = "") -> tuple[list[list], str]:
-    """读电子表格，返回 (二维数组, 用到的 sheet 名)。"""
+    """读电子表格（单 sheet），返回 (二维数组, 用到的 sheet 名)。"""
     target = sheet_id
     title = ""
     if not target:
@@ -212,17 +251,47 @@ def fetch_sheets_rows(token: str, spreadsheet_token: str, sheet_id: str = "") ->
                     break
         except FeishuError:
             pass
+    return _sheet_values(token, spreadsheet_token, target), title or target
 
-    rng = urllib.parse.quote(target, safe="")
-    j = _http_json(
-        "%s/sheets/v2/spreadsheets/%s/values/%s" % (_OPEN, spreadsheet_token, rng),
-        headers={"Authorization": "Bearer " + token},
-    )
-    values = ((j.get("data") or {}).get("valueRange") or {}).get("values") or []
-    # 飞书会跳过完全空白的行，这里补齐列数，保证每行列数一致
-    width = max((len(r) for r in values), default=0)
-    values = [list(r) + [""] * (width - len(r)) for r in values]
-    return values, title or target
+
+def fetch_all_sheets(token: str, spreadsheet_token: str) -> tuple[list[str], list[dict], list[str]]:
+    """读电子表格的**所有** sheet 并合并。
+
+    亚马逊售后台账通常是多张表拼在一起的（站内信 / 站外邀评 / 电话客服），
+    只读第一张会漏掉大半数据。各 sheet 表头不同也没关系 —— 行是 dict，
+    合并后列名取并集，各自保留自己的键。
+    返回 (并集列名, 行列表, 用到的 sheet 名列表)。
+    """
+    sheets = _sheets_of(token, spreadsheet_token)
+    if not sheets:
+        raise FeishuError("该电子表格里没有可读的工作表。")
+    headers: list[str] = []
+    all_rows: list[dict] = []
+    used: list[str] = []
+    for s in sheets:
+        if s.get("is_hidden"):
+            continue
+        sid = s.get("sheet_id") or ""
+        name = s.get("title") or sid
+        if not sid:
+            continue
+        try:
+            values = _sheet_values(token, spreadsheet_token, sid)
+        except FeishuError:
+            continue
+        if not values:
+            continue
+        cols, rows = _rows_from_values(values)
+        if not rows:
+            continue
+        all_rows.extend(rows)
+        used.append(name)
+        for c in cols:
+            if c not in headers:
+                headers.append(c)
+    if not all_rows:
+        raise FeishuError("表格里没有读到任何数据行。")
+    return headers, all_rows, used
 
 
 def fetch_bitable_rows(token: str, app_token: str, table_id: str = "") -> tuple[list[list], str]:
@@ -283,41 +352,54 @@ def fetch_bitable_rows(token: str, app_token: str, table_id: str = "") -> tuple[
 
 
 def fetch_rows(*, url: str, app_id: str, app_secret: str) -> dict:
-    """入口：解析链接 → 鉴权 → 取数。返回 {headers, rows, kind, title, source}"""
+    """入口：解析链接 → 鉴权 → 取数。
+
+    返回 {headers, rows, kind, title, source}
+    rows 统一为 list[dict]（各 sheet 表头不同也没关系，列名取并集）。
+    """
     info = parse_feishu_url(url)
     token = get_tenant_token(app_id, app_secret)
     if info["kind"] == "sheets":
-        values, title = fetch_sheets_rows(token, info["token"], info.get("sheet_id", ""))
+        headers, rows, used = fetch_all_sheets(token, info["token"])
+        title = info["token"]
+        # 用第一个 sheet 名做标题
+        try:
+            sheets = _sheets_of(token, info["token"])
+            if sheets:
+                title = sheets[0].get("title") or info["token"]
+        except FeishuError:
+            pass
+        source = " + ".join(used)
     else:
         values, title = fetch_bitable_rows(token, info["token"], info.get("table_id", ""))
+        headers, rows = _rows_from_values(values)
+        source = title
 
-    # 去掉尾部全空行
-    while values and not any(str(c).strip() for c in values[-1]):
-        values.pop()
-    if not values:
-        raise FeishuError("表格里没有读到任何内容。")
-
-    headers = [str(c).strip() for c in values[0]]
-    rows = values[1:]
     return {
         "kind": info["kind"],
         "title": title,
         "headers": headers,
         "rows": rows,
         "row_count": len(rows),
-        "source": url,
+        "source": source,
     }
 
 
 # ---------------------------------------------------------------- 转 CSV
 
-def to_csv(headers: list[str], rows: list[list]) -> bytes:
-    """把二维数组转成 UTF-8(BOM) CSV，直接喂给现有的 read_table 适配器。"""
+def to_csv(headers: list[str], rows: list) -> bytes:
+    """把数据转成 UTF-8(BOM) CSV，直接喂给现有的 read_table 适配器。
+
+    rows 可以是 list[dict]（飞书多 sheet 合并后）或 list[list]（二维数组）。
+    """
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(headers)
     for r in rows:
-        w.writerow(["" if c is None else str(c) for c in r])
+        if isinstance(r, dict):
+            w.writerow([r.get(h, "") for h in headers])
+        else:
+            w.writerow(["" if c is None else str(c) for c in r])
     return buf.getvalue().encode("utf-8-sig")
 
 

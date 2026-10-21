@@ -235,6 +235,21 @@ def _read_xlsx_multi(path: Path) -> tuple[list[dict], str]:
     return merged, " + ".join(used)
 
 
+def find_header_row(rows: list[list]) -> int:
+    """定位表头行（公开入口，供飞书表格读取复用）。"""
+    return _find_header_row(rows)
+
+
+def make_cols(hdr: list) -> list[str]:
+    """生成去重后的列名（公开入口）。"""
+    return _make_cols(hdr)
+
+
+def row_to_dict(row: list, cols: list[str]) -> dict | None:
+    """行 → dict（公开入口）。"""
+    return _row_to_dict(row, cols)
+
+
 def read_table(path: str | Path, multi_sheet: bool = False) -> tuple[list[dict], str]:
     """统一读表入口，返回 (行列表, 来源描述)。
 

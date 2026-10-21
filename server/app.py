@@ -921,11 +921,12 @@ def api_feishu_pull(req: FeishuPullReq):
     rows = data["rows"]
 
     if req.dry_run:
-        preview = [[("" if c is None else str(c)) for c in r] for r in rows[:8]]
+        preview = [[str(r.get(h, "") or "") for h in headers] for r in rows[:8]]
         return {
             "ok": True, "dry_run": True,
             "kind": data["kind"], "title": data["title"],
             "row_count": data["row_count"],
+            "source": data.get("source", ""),
             "headers": headers,
             "preview": preview,
             "cred_source": src,
