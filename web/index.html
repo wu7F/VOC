@@ -41,6 +41,7 @@
   <nav class="platform-tabs" id="platformTabs"></nav>
 
   <div class="top-actions">
+    <button class="btn-ghost accent" id="btnAsSummary" hidden title="跨平台售后总览">售后总览</button>
     <div class="role-bar" id="roleBar" hidden>
       <span id="roleName">未登录</span>
       <button id="btnLogout" title="退出登录">退出</button>
@@ -330,5 +331,32 @@
 
 <script src="/vendor/echarts.min.js"></script>
 <script src="/app.js"></script>
+
+<!-- ============ 售后总览弹窗 ============ -->
+<div class="modal-mask" id="asModal" hidden>
+  <div class="modal as-modal">
+    <div class="modal-head">
+      <span>售后 VOC 总览 · 各平台各产品售后率与原因分布</span>
+      <button class="icon-btn" id="asModalClose">✕</button>
+    </div>
+    <div class="modal-body" id="asModalBody">
+      <div class="as-kpis" id="asSumKpis"></div>
+      <div class="as-grid">
+        <div class="as-card">
+          <h3>各平台 · 各产品售后率</h3>
+          <div id="asSumRateChart" class="chart-420"></div>
+        </div>
+        <div class="as-card">
+          <h3>售后原因分布（跨平台合并）</h3>
+          <div id="asSumReasonChart" class="chart-420"></div>
+        </div>
+      </div>
+      <div class="as-card">
+        <h3>各平台各产品售后明细</h3>
+        <table class="as-table" id="asSumTable"></table>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

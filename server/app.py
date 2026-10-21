@@ -29,9 +29,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from . import auth, llm, pipeline
+from . import auth, llm, pipeline, aftersale as aftersale_module
 from .paths import config_path, ensure_dirs, web_dir
-from .store import Store
+from .store import Store, _LOCK as _STORE_LOCK
 
 
 def jsonable_error(msg: str, **extra) -> dict:
@@ -226,24 +226,27 @@ PLATFORMS = [
         "name": "AMAZON 售后",
         "label_cn": "Amazon售后",
         "group": "售后VOC",
-        "kind": "ecommerce",
+        "kind": "aftersale",
         "icon": "amazon",
         "color": "#FF7A00",
-        "desc": "上传 Amazon 售后评价 / 客服对话（含评分、留言、退换货原因）",
-        "hint": "支持列名：Rating / Comment / Review text / Reason / ASIN 等常见别名",
+        "desc": "上传 Amazon 订单明细（含产品、是否售后、售后原因）",
+        "hint": "列名示例：产品名/ASIN · 是否售后（是/否 或 退/换/仅退款）· 售后原因。系统按产品聚合售后率与原因分布。",
     },
     {
         "id": "WayfairCs",
         "name": "WAYFAIR 售后",
         "label_cn": "Wayfair售后",
         "group": "售后VOC",
-        "kind": "ecommerce",
+        "kind": "aftersale",
         "icon": "wayfair",
         "color": "#9B27B0",
-        "desc": "上传 Wayfair 售后评价 / 客服工单（含星级、留言、处理状态）",
-        "hint": "若含 Annotations / Reason 列，平台会直接采用其打标结果",
+        "desc": "上传 Wayfair 订单明细（含产品、是否售后、售后原因）",
+        "hint": "列名示例：产品名/SKU · 订单状态（退/换/正常）· 售后原因。系统按产品聚合售后率与原因分布。",
     },
 ]
+
+# 售后 VOC 平台（走独立聚合管线，不走评论文本标注）
+AFTERSALE_PLATFORMS = {p["id"] for p in PLATFORMS if p.get("kind") == "aftersale"}
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +453,10 @@ def _run_job(did: str, files: list[str], platform: str, category: str,
     def progress(pct: int, msg: str) -> None:
         store.update(did, progress=max(0, min(100, int(pct))), message=msg)
 
+    # 售后 VOC：走独立聚合管线（订单明细 → 售后率/原因分布），不走 LLM 文本标注
+    if platform in AFTERSALE_PLATFORMS:
+        return _run_aftersale_job(did, files, platform, category, progress)
+
     try:
         store.update(did, status="running", progress=2, message="开始分析…", error="")
         out = store.dataset_dir(did)
@@ -487,6 +494,103 @@ def _run_job(did: str, files: list[str], platform: str, category: str,
         except Exception:
             pass
         store.update(did, status="error", progress=100, message="分析失败", error=_public_error(e))
+
+
+def _run_aftersale_job(did: str, files: list[str], platform: str, category: str,
+                      progress) -> None:
+    try:
+        store.update(did, status="running", progress=2, message="开始售后分析…", error="")
+        out = store.dataset_dir(did)
+        result = aftersale_module.run_aftersale(
+            files=[Path(f) for f in files],
+            platform=platform,
+            category=category,
+            out_dir=out,
+            progress=progress,
+        )
+        store.update(
+            did, status="done", progress=100,
+            message=f"完成 · {result['aftersale']['total_orders']} 单 · "
+                    f"售后率 {result['aftersale']['overall_rate']:.1%} · {result['elapsed_sec']}s",
+            elapsed=result["elapsed_sec"],
+            engine_used="aftersale-aggregate",
+            warnings=result.get("warnings", []),
+            overview={
+                "units": result["overview"]["units_analyzed"],
+                "comments": 0,
+                "tag_hits": result["overview"]["tag_hits"],
+                "avg_rating": None,
+                "purchase": "",
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        tb = traceback.format_exc()
+        print(f"[VOC] 数据集 {did} 售后分析失败:\n{tb}", file=sys.stderr)
+        try:
+            (store.dataset_dir(did)).mkdir(parents=True, exist_ok=True)
+            ((store.dataset_dir(did)) / "error.log").write_text(tb, encoding="utf-8")
+        except Exception:
+            pass
+        store.update(did, status="error", progress=100, message="分析失败", error=_public_error(e))
+
+
+@app.get("/api/aftersale/summary")
+def api_aftersale_summary():
+    """跨平台聚合售后指标：各平台、各平台各产品的售后率，以及合并后的售后原因分布。
+
+    用于售后VOC 父板块的总览看板（数据来自所有 aftersale 类型且已完成的报告）。
+    """
+    roll = {"platforms": {}, "products": {}, "reasons": {}}
+    with _STORE_LOCK:
+        recs = [d for d in store._data["datasets"]
+                if d.get("platform") in AFTERSALE_PLATFORMS and d.get("status") == "done"]
+    for rec in recs:
+        p = rec["platform"]
+        rp = (store.dataset_dir(rec["id"]) / "result.json")
+        if not rp.exists():
+            continue
+        try:
+            r = json.loads(rp.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        a = r.get("aftersale")
+        if not a:
+            continue
+        pf = roll["platforms"].setdefault(p, {"platform": p, "total": 0, "aftersale": 0})
+        pf["total"] += a["total_orders"]
+        pf["aftersale"] += a["aftersale_orders"]
+        for pr in a["products"]:
+            key = f"{p}||{pr['product']}"
+            bucket = roll["products"].setdefault(key, {
+                "platform": p, "product": pr["product"], "total": 0, "aftersale": 0})
+            bucket["total"] += pr["total"]
+            bucket["aftersale"] += pr["aftersale"]
+        for rs in a["reasons"]:
+            roll["reasons"][rs["reason"]] = roll["reasons"].get(rs["reason"], 0) + rs["count"]
+
+    def _rate(b):
+        b["rate"] = round(b["aftersale"] / b["total"], 4) if b["total"] else 0.0
+        return b
+
+    platforms = sorted((_rate(v) for v in roll["platforms"].values()),
+                      key=lambda x: -x["rate"])
+    products = sorted((_rate(v) for v in roll["products"].values()),
+                     key=lambda x: (x["platform"], -x["rate"], -x["total"]))
+    rsum = sum(roll["reasons"].values()) or 1
+    reasons = sorted(({"reason": k, "count": v, "pct": round(v / rsum, 4)}
+                     for k, v in roll["reasons"].items()), key=lambda x: -x["count"])
+    tot = sum(p["total"] for p in platforms)
+    aft = sum(p["aftersale"] for p in platforms)
+    return {
+        "platforms": platforms,
+        "products": products,
+        "reasons": reasons,
+        "overall": {
+            "total": tot, "aftersale": aft,
+            "rate": round(aft / tot, 4) if tot else 0.0,
+        },
+        "datasets": len(recs),
+    }
 
 
 @app.post("/api/upload")

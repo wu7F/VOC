@@ -201,6 +201,8 @@ async function boot() {
   state.group = _first ? (_first.group || '其他') : '其他';
   renderPlatformGroups();
   renderPlatformTabs();
+  updateGroupUI();
+  bindAftersaleUI();
   bindSetupEvents();
   bindResultEvents();
   bindListToolbar();
@@ -524,6 +526,7 @@ function applyGroup(g) {
   if (kids.length) state.platform = kids[0].id;
   renderPlatformGroups();
   renderPlatformTabs();
+  updateGroupUI();
   applyPlatform(state.platform);
 }
 
@@ -532,6 +535,7 @@ function syncGroupFromPlatform() {
   if (p && p.group) state.group = p.group;
   renderPlatformGroups();
   renderPlatformTabs();
+  updateGroupUI();
 }
 
 function applyPlatform(pid) {
@@ -1308,7 +1312,10 @@ function renderFileList() {
 }
 
 function updateStartState() {
-  const ok = state.files.length > 0 && $('#fCategory').value.trim().length > 0;
+  const plat = state.platforms.find(x => x.id === state.platform) || {};
+  const needsCat = plat.kind !== 'aftersale';
+  const ok = state.files.length > 0 &&
+             (!needsCat || $('#fCategory').value.trim().length > 0);
   $('#btnStart').disabled = !ok;
   $('#runNote').className = 'run-note';
   $('#runNote').textContent = state.files.length === 0
@@ -1431,7 +1438,8 @@ async function openDataset(id) {
   state.tab = 'overview';
   // 必须先让结果视图可见再渲染 —— 否则图表容器尺寸为 0，ECharts 无法初始化
   showView('result');
-  renderResult();
+  if (state.result.report_type === 'aftersale') renderAftersale();
+  else renderResult();
 }
 
 function renderResult() {
@@ -1450,6 +1458,7 @@ function renderResult() {
   $('#resMeta').innerHTML = bits.map(b => esc(b)).join('<span class="sep">·</span>');
   showWarnings(c.warnings);
 
+  $('#resultTabs').hidden = false;
   $$('#resultTabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === 'overview'));
   $$('.panel').forEach(p => { p.hidden = p.id !== 'panel-overview'; });
   renderOverview();
@@ -1458,6 +1467,153 @@ function renderResult() {
     if (!Object.keys(state.charts).length) renderOverview();
     else resizeAllCharts();
   }, 60);
+}
+
+function renderAftersale() {
+  const r = state.result, c = state.current;
+  $('#resTitle').textContent = `${r.platform} · 售后分析`;
+  const a = r.aftersale;
+  const plat = state.platforms.find(x => x.id === r.platform) || {};
+  const color = plat.color || '#FF7A00';
+  const overall = (a.overall_rate * 100).toFixed(1) + '%';
+  $('#resMeta').innerHTML = [
+    `${c.created_at}`,
+    `${a.total_orders} 单`,
+    `${a.aftersale_orders} 笔售后`,
+    `整体售后率 ${overall}`,
+    `${state.result.elapsed_sec != null ? state.result.elapsed_sec : (c.elapsed || '-')}s`,
+  ].map(esc).join('<span class="sep">·</span>');
+  showWarnings(c.warnings);
+  $('#resultTabs').hidden = true;
+  $$('.panel').forEach(p => p.hidden = p.id !== 'panel-overview');
+
+  const html = `
+    <div class="as-kpis">
+      <div class="as-kpi"><div class="as-kpi-v">${a.total_orders}</div><div class="as-kpi-l">总订单数</div></div>
+      <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">售后订单数</div></div>
+      <div class="as-kpi acc"><div class="as-kpi-v">${overall}</div><div class="as-kpi-l">整体售后率</div></div>
+      <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">涉及产品</div></div>
+    </div>
+    <div class="as-grid">
+      <div class="as-card">
+        <h3>各产品售后率</h3>
+        <div id="asRateChart" class="chart-380"></div>
+      </div>
+      <div class="as-card">
+        <h3>售后原因分布</h3>
+        <div id="asReasonChart" class="chart-380"></div>
+      </div>
+    </div>
+    <div class="as-card">
+      <h3>各产品售后明细</h3>
+      <table class="as-table">
+        <thead><tr><th>产品</th><th>总单数</th><th>售后单数</th><th>售后率</th><th>趋势</th></tr></thead>
+        <tbody>
+          ${a.products.map(p => `
+            <tr>
+              <td>${esc(p.product)}</td>
+              <td>${p.total}</td>
+              <td>${p.aftersale}</td>
+              <td>${(p.rate * 100).toFixed(1)}%</td>
+              <td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  $('#panel-overview').innerHTML = html;
+  // 复用主题色
+  document.documentElement.style.setProperty('--accent', color);
+  setTimeout(() => { renderAsCharts(a, color); resizeAllCharts(); }, 60);
+}
+
+function renderAsCharts(a, color) {
+  if (typeof echarts === 'undefined') return;
+  const barEl = document.getElementById('asRateChart');
+  if (barEl) {
+    const chart = echarts.init(barEl);
+    state.charts['asRateChart'] = chart;
+    const top = a.products.slice(0, 15);
+    chart.setOption({
+      grid: { left: 8, right: 28, top: 16, bottom: 8, containLabel: true },
+      tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%` },
+      xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 1 },
+      yAxis: { type: 'category', data: top.map(p => p.product).reverse(),
+               axisLabel: { width: 130, overflow: 'truncate' } },
+      series: [{ type: 'bar', data: top.map(p => p.rate).reverse(), itemStyle: { color: color },
+                label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
+    });
+  }
+  const pieEl = document.getElementById('asReasonChart');
+  if (pieEl) {
+    const chart = echarts.init(pieEl);
+    state.charts['asReasonChart'] = chart;
+    chart.setOption({
+      tooltip: { trigger: 'item', formatter: p => `${p.name}<br/>${p.value} 笔 (${p.percent.toFixed(1)}%)` },
+      legend: { type: 'scroll', orient: 'vertical', right: 6, top: 8, textStyle: { fontSize: 11 } },
+      series: [{ type: 'pie', radius: ['38%', '66%'], center: ['36%', '52%'],
+                 data: a.reasons.map(r => ({ name: r.reason, value: r.count })),
+                 label: { show: false } }]
+    });
+  }
+}
+
+function bindAftersaleUI() {
+  $('#btnAsSummary').onclick = openAftersaleSummary;
+  $('#asModalClose').onclick = () => { $('#asModal').hidden = true; };
+  $('#asModal').addEventListener('click', e => { if (e.target.id === 'asModal') $('#asModal').hidden = true; });
+}
+
+function updateGroupUI() {
+  const btn = $('#btnAsSummary');
+  if (btn) btn.hidden = (state.group !== '售后VOC');
+}
+
+async function openAftersaleSummary() {
+  const m = $('#asModal');
+  m.hidden = false;
+  const body = $('#asModalBody');
+  body.classList.add('loading');
+  try {
+    const d = await (await api('/api/aftersale/summary')).json();
+    renderAftersaleSummary(d);
+  } catch (e) {
+    body.innerHTML = `<p class="err">加载失败：${esc(e.message || e)}</p>`;
+  }
+}
+
+function renderAftersaleSummary(d) {
+  const body = $('#asModalBody');
+  body.classList.remove('loading');
+  const ov = d.overall;
+  $('#asSumKpis').innerHTML = `
+    <div class="as-kpi"><div class="as-kpi-v">${ov.total}</div><div class="as-kpi-l">总订单数</div></div>
+    <div class="as-kpi"><div class="as-kpi-v">${ov.aftersale}</div><div class="as-kpi-l">售后订单数</div></div>
+    <div class="as-kpi acc"><div class="as-kpi-v">${(ov.rate * 100).toFixed(1)}%</div><div class="as-kpi-l">整体售后率</div></div>
+    <div class="as-kpi"><div class="as-kpi-v">${d.datasets}</div><div class="as-kpi-l">已分析数据集</div></div>`;
+  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品</th><th>总单数</th><th>售后单数</th><th>售后率</th><th>趋势</th></tr></thead><tbody>` +
+    d.products.map(p => `<tr><td>${esc(p.platform)}</td><td>${esc(p.product)}</td><td>${p.total}</td><td>${p.aftersale}</td><td>${(p.rate * 100).toFixed(1)}%</td><td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td></tr>`).join('') + `</tbody>`;
+  if (typeof echarts !== 'undefined') {
+    const bar = echarts.init(document.getElementById('asSumRateChart'));
+    state.charts['asSumRateChart'] = bar;
+    const top = d.products.slice(0, 20);
+    bar.setOption({
+      grid: { left: 8, right: 28, top: 16, bottom: 8, containLabel: true },
+      tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%` },
+      xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 1 },
+      yAxis: { type: 'category', data: top.map(p => `${p.platform}·${p.product}`).reverse(),
+               axisLabel: { width: 170, overflow: 'truncate' } },
+      series: [{ type: 'bar', data: top.map(p => p.rate).reverse(), itemStyle: { color: '#9B27B0' },
+                label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' } }]
+    });
+    const pie = echarts.init(document.getElementById('asSumReasonChart'));
+    state.charts['asSumReasonChart'] = pie;
+    pie.setOption({
+      tooltip: { trigger: 'item', formatter: p => `${p.name}<br/>${p.value} 笔 (${p.percent.toFixed(1)}%)` },
+      legend: { type: 'scroll', orient: 'vertical', right: 6, top: 8, textStyle: { fontSize: 11 } },
+      series: [{ type: 'pie', radius: ['38%', '66%'], center: ['36%', '52%'],
+                data: d.reasons.map(r => ({ name: r.reason, value: r.count })), label: { show: false } }]
+    });
+  }
 }
 
 function switchTab(tab) {
