@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from . import auth, llm, pipeline, aftersale as aftersale_module, feishu as feishu_module
+from . import feishu_sources as fsources
 from .paths import config_path, ensure_dirs, web_dir
 from .store import Store, _LOCK as _STORE_LOCK
 
@@ -448,6 +449,13 @@ async def api_events(did: str):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def _make_progress(did: str):
+    """给同步流程用的进度回调。"""
+    def progress(pct: int, msg: str) -> None:
+        store.update(did, progress=max(0, min(100, int(pct))), message=msg)
+    return progress
+
+
 def _run_job(did: str, files: list[str], platform: str, category: str,
              brands: str, comment_limit: int, engine: str = "auto") -> None:
     def progress(pct: int, msg: str) -> None:
@@ -507,6 +515,7 @@ def _run_aftersale_job(did: str, files: list[str], platform: str, category: str,
             category=category,
             out_dir=out,
             progress=progress,
+            data_dir=BASE,
         )
         _a = result["aftersale"]
         if _a.get("mode") == "ledger":
@@ -711,6 +720,155 @@ def api_feishu_config():
         "app_id_masked": masked,
         "source": cfg.get("source", ""),
     }
+
+
+# ---------------------------------------------------------------------------
+# 飞书数据源：表格变更后看板自动刷新，无需再上传文件
+# ---------------------------------------------------------------------------
+
+class FeishuSourceReq(BaseModel):
+    name: str = ""
+    url: str = ""
+    platform: str = "AmazonCs"
+    category: str = ""
+    auto_sync: bool = True
+    interval_min: int = 30
+    app_id: str = ""
+    app_secret: str = ""
+
+
+def _sync_source(src: dict, app_id: str = "", app_secret: str = "") -> dict:
+    """执行一次同步：拉飞书 → 写 CSV → 重跑分析 → 更新同一个数据集。
+
+    返回 {"ok":bool, "message":str, "dataset_id":str}
+    """
+    sid = src["id"]
+    url = (src.get("url") or "").strip()
+    platform = src.get("platform") or "AmazonCs"
+    if not url:
+        return {"ok": False, "message": "未配置表格链接", "dataset_id": ""}
+
+    aid, sec, _ = _feishu_creds(app_id, app_secret)
+    if not aid or not sec:
+        msg = ("尚未配置飞书应用凭证（app_id / app_secret）。"
+               "请在「飞书接入」里填写，或让管理员配置环境变量 "
+               "VOC_FEISHU_APP_ID / VOC_FEISHU_APP_SECRET。")
+        fsources.upsert_source(BASE, sid=sid, last_status="error", last_message=msg)
+        return {"ok": False, "message": msg, "dataset_id": src.get("dataset_id", "")}
+
+    try:
+        data = feishu_module.fetch_rows(url=url, app_id=aid, app_secret=sec)
+    except feishu_module.FeishuError as e:
+        msg = str(e)
+        fsources.upsert_source(BASE, sid=sid, last_status="error", last_message=msg)
+        return {"ok": False, "message": msg, "dataset_id": src.get("dataset_id", "")}
+    except Exception as e:  # noqa: BLE001
+        msg = "同步失败：%s" % e
+        fsources.upsert_source(BASE, sid=sid, last_status="error", last_message=msg)
+        return {"ok": False, "message": msg, "dataset_id": src.get("dataset_id", "")}
+
+    csv_bytes = feishu_module.to_csv(data["headers"], data["rows"])
+    fname = "feishu_%s.csv" % re.sub(r"[^\w\-]+", "_", data["title"] or "sheet")[:40]
+    saved = store.save_upload(fname, csv_bytes)
+
+    did = src.get("dataset_id") or ""
+    if not did or not store.get(did):
+        name = src.get("name") or ("飞书·%s" % (data["title"] or platform))
+        rec = store.add(name=name, platform=platform,
+                        category=src.get("category") or "售后明细",
+                        brands="", comment_limit=20,
+                        files=[fname], engine="auto", uploads=[saved])
+        did = rec["id"]
+        fsources.upsert_source(BASE, sid=sid, dataset_id=did)
+    else:
+        store.update(did, name=src.get("name") or store.get(did)["name"],
+                     uploads=[saved], files=[fname],
+                     status="running", progress=5, message="从飞书同步中…", error="")
+
+    # 同步跑分析（同步执行，保证返回时看板已更新）
+    prog = _make_progress(did)
+    _run_aftersale_job(did, [saved], platform, src.get("category") or "售后明细", prog)
+
+    rec = store.get(did) or {}
+    ok = rec.get("status") == "done"
+    msg = rec.get("message") or ("完成" if ok else (rec.get("error") or "分析失败"))
+    fsources.upsert_source(BASE, sid=sid,
+                            last_sync_at=time.time(),
+                            last_status="ok" if ok else "error",
+                            last_message=msg[:200],
+                            dataset_id=did)
+    return {"ok": ok, "message": msg, "dataset_id": did,
+            "row_count": data["row_count"]}
+
+
+@app.get("/api/feishu/sources")
+def api_feishu_sources():
+    srcs = fsources.list_sources(BASE)
+    cfg = feishu_module.load_config(BASE)
+    return {
+        "sources": srcs,
+        "cred_configured": bool(cfg.get("app_id") and cfg.get("app_secret")),
+        "cred_source": cfg.get("source", ""),
+    }
+
+
+@app.post("/api/feishu/sources")
+def api_feishu_source_create(req: FeishuSourceReq):
+    if not (req.url or "").strip():
+        raise HTTPException(400, jsonable_error("请填写飞书表格链接。"))
+    if req.platform not in AFTERSALE_PLATFORMS:
+        raise HTTPException(400, jsonable_error(
+            "飞书表格目前只支持导入到售后 VOC（Amazon售后 / Wayfair售后）。"))
+    # 凭证：本次填了就顺手存下来（方便之后自动同步）
+    if req.app_id and req.app_secret:
+        try:
+            feishu_module.save_config(BASE, req.app_id, req.app_secret)
+        except feishu_module.FeishuError:
+            pass
+    rec = fsources.upsert_source(
+        BASE, name=(req.name or "").strip() or ("飞书源 · " + req.url[:40]),
+        url=req.url.strip(), platform=req.platform,
+        category=(req.category or "").strip() or "售后明细",
+        auto_sync=bool(req.auto_sync), interval_min=max(1, int(req.interval_min or 30)))
+    # 立刻同步一次，确认链路通
+    out = _sync_source(rec, req.app_id, req.app_secret)
+    return {"ok": out["ok"], "source": fsources.get_source(BASE, rec["id"]),
+            "message": out["message"], "dataset_id": out["dataset_id"]}
+
+
+@app.patch("/api/feishu/sources/{sid}")
+def api_feishu_source_update(sid: str, req: FeishuSourceReq):
+    if not fsources.get_source(BASE, sid):
+        raise HTTPException(404, "数据源不存在")
+    fields = {}
+    if req.name:
+        fields["name"] = req.name.strip()
+    if req.url:
+        fields["url"] = req.url.strip()
+    if req.platform:
+        fields["platform"] = req.platform
+    if req.category:
+        fields["category"] = req.category.strip()
+    fields["auto_sync"] = bool(req.auto_sync)
+    fields["interval_min"] = max(1, int(req.interval_min or 30))
+    rec = fsources.upsert_source(BASE, sid=sid, **fields)
+    return {"ok": True, "source": rec}
+
+
+@app.delete("/api/feishu/sources/{sid}")
+def api_feishu_source_delete(sid: str):
+    if not fsources.delete_source(BASE, sid):
+        raise HTTPException(404, "数据源不存在")
+    return {"ok": True}
+
+
+@app.post("/api/feishu/sources/{sid}/sync")
+def api_feishu_source_sync(sid: str, req: FeishuSourceReq):
+    src = fsources.get_source(BASE, sid)
+    if not src:
+        raise HTTPException(404, "数据源不存在")
+    out = _sync_source(src, req.app_id, req.app_secret)
+    return out
 
 
 @app.post("/api/feishu/config")

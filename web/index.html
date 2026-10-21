@@ -108,18 +108,23 @@
 
         <div class="card fs-card" id="cardFeishu" hidden>
           <div class="card-head">
-            <div class="card-title">飞书表格直连 <em class="fs-tag">售后VOC 专用</em></div>
-            <div class="card-sub">不用导出 Excel，直接从飞书电子表格 / 多维表格拉取售后明细</div>
+            <div class="card-title">飞书数据源 <em class="fs-tag">自动更新</em></div>
+            <div class="card-sub">配置一次，之后看板随飞书表格自动刷新，无需再上传文件</div>
           </div>
+
+          <div id="fsSourceList" class="fs-srclist"></div>
 
           <div class="fs-row">
             <input type="text" id="fsUrl" class="fs-input"
                    placeholder="粘贴飞书表格链接，如 https://xxx.feishu.cn/sheets/shtcnXXXX">
-            <button class="btn-ghost" id="btnFsPreview">读取表格</button>
+          </div>
+          <div class="fs-row">
+            <input type="text" id="fsName" class="fs-input" placeholder="数据源名称，如：亚马逊店铺1 · GN品牌售后登记">
+            <select id="fsPlatform" class="fs-input" style="max-width:150px"></select>
+            <input type="number" id="fsInterval" class="fs-input" style="max-width:110px"
+                   value="30" min="1" title="自动同步间隔（分钟）">
           </div>
           <div class="fs-note" id="fsNote">读取后先预览表头，确认「产品 / 是否售后 / 售后原因」三列能被识别再分析。</div>
-
-          <div class="fs-preview" id="fsPreview" hidden></div>
 
           <details class="fs-cred">
             <summary>飞书应用凭证 <span id="fsCredState"></span></summary>
@@ -139,7 +144,8 @@
           </details>
 
           <div class="fs-actions">
-            <button class="btn-primary" id="btnFsStart" disabled>从飞书导入并分析</button>
+            <button class="btn-primary" id="btnFsStart" disabled>保存数据源并立即同步</button>
+            <button class="btn-ghost" id="btnFsPreview">先读取预览</button>
             <span class="run-note" id="fsRunNote"></span>
           </div>
         </div>
@@ -390,10 +396,9 @@
         </div>
       </div>
       <div class="as-card">
-        <h3>各平台各产品售后明细</h3>
+        <h3>各平台各产品族售后明细</h3>
         <table class="as-table" id="asSumTable"></table>
       </div>
-      <div id="asSumShops"></div>
     </div>
   </div>
 </div>

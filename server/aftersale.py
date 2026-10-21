@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 from . import adapters
+from .sku_merge import SkuGrouper
 
 # 列名别名（小写匹配）：角色 -> 候选关键词
 _COLUMN_ALIASES = {
@@ -193,12 +194,13 @@ def _classify_row(row: dict, cols: dict) -> tuple[str, bool | None]:
 
 
 def run_aftersale(*, files: list[Path], platform: str, category: str,
-                  out_dir: Path, progress=None) -> dict:
+                  out_dir: Path, progress=None, data_dir=None) -> dict:
     def p(pct: int, msg: str) -> None:
         if progress:
             progress(pct, msg)
 
     t0 = time.time()
+    grouper = SkuGrouper(data_dir)
     p(5, "读取订单明细…")
     all_rows: list[dict] = []
     sources: list[str] = []
@@ -294,13 +296,14 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
     prod: dict[str, dict] = {}
     reasons: dict[str, int] = {}
     cats: dict[str, int] = {}
-    shops: dict[str, dict] = {}
     total = 0
     aftersale = 0
     unknown = 0
     filtered_out = 0
     for row in all_rows:
-        product, is_as = _classify_row(row, cols)
+        raw_product, is_as = _classify_row(row, cols)
+        # 高度相似的 SKU 合并成产品族（如 MR221118BR-WKS / MR221118-BR-MJT-BJ-1）
+        product = grouper.family(raw_product)
         if mode == "detail":
             # 明细模式：flag 为空/无法判定 = **未知**，既不计入分子也不计入分母
             if is_as is None:
@@ -322,24 +325,21 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             reasons[reason] = reasons.get(reason, 0) + 1
             cat = _reason_category(reason)
             cats[cat] = cats.get(cat, 0) + 1
-        bucket = prod.setdefault(product, {"total": 0, "aftersale": 0, "cats": {}})
+        bucket = prod.setdefault(product, {"total": 0, "aftersale": 0, "cats": {},
+                                           "skus": {}, "raw": raw_product})
         bucket["total"] += 1
+        bucket["skus"][raw_product] = bucket["skus"].get(raw_product, 0) + 1
         if is_as:
             bucket["aftersale"] += 1
             bucket["cats"][cat] = bucket["cats"].get(cat, 0) + 1
-        if shop_cols:
-            sh = _first_nonempty(row, shop_cols) or "未标注店铺"
-            sb = shops.setdefault(sh, {"records": 0, "aftersale": 0, "reasons": {}})
-            sb["records"] += 1
-            if is_as:
-                sb["aftersale"] += 1
-                rsn = _first_nonempty(row, reason_cols) or "未注明原因"
-                sb["reasons"][rsn[:40]] = sb["reasons"].get(rsn[:40], 0) + 1
 
     # 台账模式下产品级「售后率」恒为 1.0（每条记录都是售后），会误导 → 置 None
     products = sorted(
         ({"product": k, "total": v["total"], "aftersale": v["aftersale"],
           "top_category": (sorted(v.get("cats", {}).items(), key=lambda x: -x[1]) or [("", 0)])[0][0],
+          "sku_count": len(v.get("skus", {})),
+          "members": [{"sku": sk, "count": c}
+                      for sk, c in sorted(v.get("skus", {}).items(), key=lambda x: -x[1])],
           "rate": (round(v["aftersale"] / v["total"], 4)
                    if v["total"] and mode == "detail" else None)}
          for k, v in prod.items()),
@@ -356,14 +356,6 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
                            key=lambda x: -x["count"])
     for c_ in category_list:
         c_["pct"] = round(c_["count"] / csum, 4)
-
-    shop_list = sorted(
-        ({"shop": k, "records": v["records"], "aftersale": v["aftersale"],
-          "top_reasons": [{"reason": rk, "count": rv}
-                          for rk, rv in sorted(v["reasons"].items(),
-                                              key=lambda x: -x[1])[:3]]}
-         for k, v in shops.items()),
-        key=lambda x: -x["records"])
 
     # 缺分母 → 售后率为 None（台账模式）
     overall_rate = round(aftersale / total, 4) if (total and mode == "detail") else None
@@ -397,7 +389,6 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             "products": products,
             "reasons": reason_list,
             "categories": category_list,
-            "shops": shop_list,
             "filtered_out": filtered_out,
             "unknown": unknown,
         },
@@ -445,11 +436,16 @@ def _md(r: dict) -> str:
             lines.append(f"| {p_['product']} | {p_['total']} | {p_['aftersale']} | — |")
         else:
             lines.append(f"| {p_['product']} | {p_['total']} | {p_['aftersale']} | {p_['rate']:.1%} |")
-    if a.get("shops"):
-        lines += ["", "## 各子店铺", "", "| 子店铺 | 登记条数 | 主要问题 |", "|---|---|---|"]
-        for s_ in a["shops"]:
-            top = "、".join("%s(%d)" % (t["reason"], t["count"]) for t in s_["top_reasons"]) or "—"
-            lines.append(f"| {s_['shop']} | {s_['records']} | {top} |")
+    if a.get("products"):
+        lines += ["", "## SKU 合并明细", "",
+                  "| 产品族 | 合并 SKU 数 | 售后条数 | 成员 SKU |", "|---|---|---|---|"]
+        for p_ in a["products"]:
+            if p_.get("sku_count", 1) <= 1:
+                continue
+            mem = ", ".join(m["sku"] for m in (p_.get("members") or [])[:6])
+            if p_.get("sku_count", 0) > 6:
+                mem += " …"
+            lines.append(f"| {p_['product']} | {p_['sku_count']} | {p_['aftersale']} | {mem} |")
     lines += ["", "## 售后原因分布", ""]
     for rs in a["reasons"]:
         lines.append(f"- {rs['reason']}：{rs['count']}（{rs['pct']:.1%}）")

@@ -1006,3 +1006,30 @@ table.tbl tr.clickable { cursor: pointer; }
   color: var(--text-2);
   line-height: 1.55;
 }
+
+/* ========== 飞书数据源 ========== */
+
+.fs-srclist { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.fs-src {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; background: var(--surface-2);
+}
+.fs-src-main { flex: 1; min-width: 0; }
+.fs-src-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.fs-src-meta { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.fs-src-msg {
+  font-size: 11.5px; color: var(--text-2); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fs-src-acts { display: flex; gap: 8px; flex-shrink: 0; }
+.fs-mute { color: var(--text-3); }
+
+/* SKU 合并成员 */
+.as-mem {
+  display: inline-block; max-width: 320px;
+  font-size: 11.5px; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: bottom;
+}
+.as-mem1 { font-size: 12px; color: var(--text-3); }

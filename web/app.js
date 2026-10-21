@@ -529,6 +529,46 @@ function applyGroup(g) {
   renderPlatformTabs();
   updateGroupUI();
   applyPlatform(state.platform);
+  // 售后VOC 父板块：直接进「平台总售后看板」，不显示新建分析表单
+  if (g === '售后VOC') openAftersaleOverview();
+}
+
+/* 售后VOC 父板块落地页：优先用飞书数据源（到期自动同步），否则打开最新报告 */
+async function openAftersaleOverview() {
+  try {
+    // 1) 飞书数据源优先
+    const fs = await (await api('/api/feishu/sources')).json();
+    state.feishuSources = fs.sources || [];
+    state.feishuCred = fs;
+    const src = state.feishuSources.find(s => s.dataset_id && s.platform !== 'WayfairCs');
+    if (src) {
+      const last = src.last_sync_at ? (Date.now() / 1000 - src.last_sync_at) / 60 : 1e9;
+      const iv = src.interval_min || 30;
+      if (src.auto_sync !== false && last > iv) {
+        // 到期 → 先同步再展示（看板内容始终是最新的）
+        await api(`/api/feishu/sources/${src.id}/sync`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        await loadDatasets();
+      }
+      if (src.dataset_id) {
+        const rec = state.datasets.find(d => d.id === src.dataset_id);
+        if (rec && rec.status === 'done') { await openDataset(src.dataset_id); return; }
+      }
+    }
+    // 2) 退回到该平台最新的一份已完成报告
+    const cand = state.datasets
+      .filter(d => d.status === 'done' && d.platform !== 'WayfairCs')
+      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    if (cand.length) { await openDataset(cand[0].id); return; }
+    // 3) 都没有 → 显示空态引导（飞书源配置）
+    showView('setup');
+    $('#cardFeishu').hidden = false;
+    $('#fsNote').textContent = '还没有售后数据。配置一个飞书表格数据源，之后看板会随表格自动更新，无需再上传文件。';
+  } catch (e) {
+    showView('setup');
+  }
 }
 
 function syncGroupFromPlatform() {
@@ -1353,7 +1393,7 @@ async function startAnalysis() {
   }
 }
 
-/* ====================== 飞书表格直连（售后 VOC 专用） ====================== */
+/* ====================== 飞书数据源（售后 VOC，自动更新） ====================== */
 
 let fsData = null;   // 最近一次预览结果：{headers, row_count, columns, ...}
 
@@ -1417,12 +1457,71 @@ async function fsLoadCredState() {
   } catch (e) { el.textContent = ''; }
 }
 
+/** 渲染已配置的数据源列表 */
+async function fsRenderSources() {
+  const box = $('#fsSourceList');
+  if (!box) return;
+  let d;
+  try { d = await (await api('/api/feishu/sources')).json(); }
+  catch (e) { box.innerHTML = ''; return; }
+  state.feishuSources = d.sources || [];
+  state.feishuCred = d;
+  if (!state.feishuSources.length) { box.innerHTML = ''; return; }
+  box.innerHTML = state.feishuSources.map(s => {
+    const st = s.last_status === 'ok' ? 'fs-ok' : (s.last_status === 'error' ? 'fs-warn' : 'fs-mute');
+    const t = s.last_sync_at
+      ? new Date(s.last_sync_at * 1000).toLocaleString('zh-CN', { hour12: false }).slice(0, 16)
+      : '尚未同步';
+    return `<div class="fs-src">
+      <div class="fs-src-main">
+        <div class="fs-src-name">${esc(s.name || '未命名')}</div>
+        <div class="fs-src-meta"><span class="${st}">${esc(s.last_status || '未同步')}</span>
+          · ${esc(t)} · 每 ${s.interval_min || 30} 分钟自动刷新 · ${esc(s.platform)}</div>
+        ${s.last_message ? `<div class="fs-src-msg">${esc(s.last_message)}</div>` : ''}
+      </div>
+      <div class="fs-src-acts">
+        <button class="btn-ghost" data-sync="${esc(s.id)}">立即同步</button>
+        <button class="btn-ghost danger" data-del="${esc(s.id)}">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+  $$('#fsSourceList [data-sync]').forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = '同步中…';
+      try {
+        const r = await fsPost(`/api/feishu/sources/${b.dataset.sync}/sync`, fsCreds());
+        fsNote(r.ok ? `同步完成：${r.message}` : `同步失败：${r.message}`, !r.ok);
+        await fsRenderSources();
+        await loadDatasets();
+      } catch (e) { fsNote('同步失败：' + e.message, true); }
+      b.disabled = false; b.textContent = '立即同步';
+    };
+  });
+  $$('#fsSourceList [data-del]').forEach(b => {
+    b.onclick = async () => {
+      if (!confirm('删除这个数据源？（已生成的历史报告不会删除）')) return;
+      try {
+        await fetch(`/api/feishu/sources/${b.dataset.del}`, { method: 'DELETE' });
+        await fsRenderSources();
+      } catch (e) { fsNote('删除失败：' + e.message, true); }
+    };
+  });
+}
+
 function bindFeishuUI() {
   if (!$('#btnFsPreview')) return;
   $('#btnFsPreview').onclick = fsPreview;
   $('#btnFsStart').onclick = fsStart;
   $('#btnFsSaveCred').onclick = fsSaveCred;
+  // 平台下拉
+  const sel = $('#fsPlatform');
+  if (sel) {
+    const plats = state.platforms.filter(p => p.kind === 'aftersale');
+    sel.innerHTML = plats.map(p => `<option value="${esc(p.id)}">${esc(p.label_cn || p.name)}</option>`).join('');
+    sel.value = plats.some(p => p.id === state.platform) ? state.platform : (plats[0] ? plats[0].id : '');
+  }
   fsLoadCredState();
+  fsRenderSources();
 }
 
 async function fsSaveCred() {
@@ -1434,30 +1533,11 @@ async function fsSaveCred() {
   try {
     await fsPost('/api/feishu/config', c);
     $('#fsAppSecret').value = '';
-    fsNote('凭证已保存到服务器（仅本次填写时生效的字段会被清空）');
+    fsNote('凭证已保存到服务器');
     await fsLoadCredState();
   } catch (e) {
     fsNote('保存失败：' + e.message, true);
   }
-}
-
-function renderFsPreview(d) {
-  const box = $('#fsPreview');
-  const head = d.headers || [];
-  const rows = d.preview || [];
-  let html = `<div class="fs-prev-head">${esc(d.title || '表格')} · ${d.kind === 'bitable' ? '多维表格' : '电子表格'} · 共 <b>${d.row_count}</b> 行数据</div>`;
-  html += '<div class="fs-prev-scroll"><table class="fs-table"><thead><tr>';
-  head.forEach(h => { html += `<th>${esc(h)}</th>`; });
-  html += '</tr></thead><tbody>';
-  rows.forEach(r => {
-    html += '<tr>';
-    for (let i = 0; i < head.length; i++) html += `<td>${esc(r[i])}</td>`;
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-  html += '<div class="fs-prev-foot">（仅预览前 8 行）</div>';
-  box.innerHTML = html;
-  box.hidden = false;
 }
 
 async function fsPreview() {
@@ -1471,53 +1551,54 @@ async function fsPreview() {
   try {
     const d = await fsPost('/api/feishu/pull', {
       url: url,
-      platform: state.platform,
+      platform: ($('#fsPlatform') && $('#fsPlatform').value) || state.platform,
       dry_run: true,
       ...fsCreds()
     });
     fsData = d;
-    renderFsPreview(d);
     const cols = d.columns || {};
     const miss = [];
     if (!cols.product) miss.push('产品');
     if (!cols.flag) miss.push('是否售后');
     if (miss.length) {
-      fsNote(`已读到 ${d.row_count} 行，但未能识别「${miss.join('、')}」列，请检查表头命名`, true);
+      fsNote(`已读到 ${d.row_count} 行，但未能识别「${miss.join('、')}」列 —— 将按台账模式处理（不算售后率）`, true);
     } else {
       const reasonTxt = cols.reason
         ? `售后原因=「${cols.reason}」`
         : '未识别到「售后原因」列（原因将归为「未注明原因」）';
-      fsNote(`已读到 ${d.row_count} 行 · 识别到 产品=「${cols.product}」 是否售后=「${cols.flag}」 ${reasonTxt}`);
-      $('#btnFsStart').disabled = false;
+      fsNote(`已读到 ${d.row_count} 行 · 产品=「${cols.product}」 是否售后=「${cols.flag}」 ${reasonTxt}`);
     }
+    $('#btnFsStart').disabled = false;
   } catch (e) {
     fsNote('读取失败：' + e.message, true);
-    $('#fsPreview').hidden = true;
   } finally {
     btn.disabled = false; btn.textContent = old;
   }
 }
 
 async function fsStart() {
-  if (!fsData) { fsNote('请先点「读取表格」确认数据', true); return; }
   const url = ($('#fsUrl').value || '').trim();
+  if (!url) { fsNote('请先粘贴飞书表格链接', true); return; }
   const btn = $('#btnFsStart');
   const note = $('#fsRunNote');
   btn.disabled = true;
   note.className = 'run-note';
-  note.textContent = '正在从飞书拉取…';
+  note.textContent = '正在从飞书拉取并分析…';
   try {
-    const d = await fsPost('/api/feishu/pull', {
+    const r = await fsPost('/api/feishu/sources', {
       url: url,
-      platform: state.platform,
+      name: ($('#fsName').value || '').trim(),
+      platform: ($('#fsPlatform') && $('#fsPlatform').value) || state.platform,
       category: ($('#fCategory').value || '').trim(),
-      dataset_name: ($('#fName').value || '').trim(),
-      dry_run: false,
+      auto_sync: true,
+      interval_min: parseInt(($('#fsInterval') && $('#fsInterval').value) || '30', 10),
       ...fsCreds()
     });
-    note.textContent = `已拉取 ${d.row_count} 行，正在分析…`;
+    note.textContent = r.ok ? '已保存数据源，正在进入看板…' : ('同步失败：' + r.message);
+    if (!r.ok) { fsNote(r.message, true); btn.disabled = false; return; }
+    await fsRenderSources();
     await loadDatasets();
-    watchJob(d.id);
+    if (r.dataset_id) { await openDataset(r.dataset_id); }
   } catch (e) {
     btn.disabled = false;
     note.className = 'run-note err';
@@ -1650,11 +1731,11 @@ function renderAftersale() {
   const plat = state.platforms.find(x => x.id === r.platform) || {};
   const color = plat.color || '#FF7A00';
   const ledger = a.mode === 'ledger';
-  const shops = a.shops || [];
   const cats = a.categories || [];
   const rateTxt = (a.overall_rate == null) ? '—' : (a.overall_rate * 100).toFixed(1) + '%';
   const cntLabel = ledger ? '售后登记条数' : '总订单数';
   const asLabel = ledger ? '售后记录数' : '售后订单数';
+  const mergedSkus = (a.products || []).reduce((n, p) => n + Math.max(0, (p.sku_count || 1) - 1), 0);
   $('#resMeta').innerHTML = [
     `${c.created_at}`,
     `${a.total_orders} ${ledger ? '条' : '单'}`,
@@ -1669,19 +1750,19 @@ function renderAftersale() {
   const html = `
     ${ledger ? `<div class="as-note">
       <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，没有全量订单数做分母，
-      因此<b>不计算售后率</b>。下面展示的是售后<b>登记量</b>、问题分布与各店铺/产品的集中度。
+      因此<b>不计算售后率</b>。下面展示的是售后<b>登记量</b>、问题分布与产品集中度。
       ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
     </div>` : ''}
     <div class="as-kpis">
       <div class="as-kpi"><div class="as-kpi-v">${a.total_orders}</div><div class="as-kpi-l">${cntLabel}</div></div>
       <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">${asLabel}</div></div>
       <div class="as-kpi acc"><div class="as-kpi-v">${rateTxt}</div><div class="as-kpi-l">整体售后率</div></div>
-      <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">涉及产品</div></div>
-      ${shops.length ? `<div class="as-kpi"><div class="as-kpi-v">${shops.length}</div><div class="as-kpi-l">涉及子店铺</div></div>` : ''}
+      <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">产品族</div></div>
+      ${mergedSkus ? `<div class="as-kpi"><div class="as-kpi-v">${mergedSkus}</div><div class="as-kpi-l">合并的相似 SKU</div></div>` : ''}
     </div>
     <div class="as-grid">
       <div class="as-card">
-        <h3>${ledger ? '各产品售后登记量 TOP15' : '各产品售后率'}</h3>
+        <h3>${ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率'}</h3>
         <div id="asRateChart" class="chart-380"></div>
       </div>
       <div class="as-card">
@@ -1689,36 +1770,21 @@ function renderAftersale() {
         <div id="asReasonChart" class="chart-380"></div>
       </div>
     </div>
-    ${shops.length ? `
     <div class="as-card">
-      <h3>各子店铺售后分布</h3>
+      <h3>${ledger ? '各产品族售后明细' : '各产品族售后率明细'}</h3>
       <table class="as-table">
-        <thead><tr><th>子店铺</th><th>登记条数</th><th>占比</th><th>主要问题</th><th>分布</th></tr></thead>
-        <tbody>
-          ${shops.map(s => {
-            const pct = a.total_orders ? (s.records / a.total_orders * 100) : 0;
-            const top = (s.top_reasons || []).map(t => `${esc(t.reason)}（${t.count}）`).join('、') || '—';
-            return `<tr>
-              <td>${esc(s.shop)}</td>
-              <td>${s.records}</td>
-              <td>${pct.toFixed(1)}%</td>
-              <td class="as-reasons">${top}</td>
-              <td><div class="bar"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
-    <div class="as-card">
-      <h3>${ledger ? '各产品售后明细' : '各产品售后率明细'}</h3>
-      <table class="as-table">
-        <thead><tr><th>产品</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th><th>${ledger ? '占比' : '趋势'}</th></tr></thead>
+        <thead><tr><th>产品族</th><th>合并 SKU</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th><th>${ledger ? '占比' : '趋势'}</th></tr></thead>
         <tbody>
           ${a.products.map(p => {
+            const mem = p.members || [];
+            const memTxt = (p.sku_count || 1) > 1
+              ? `<span class="as-mem" title="${esc(mem.map(m => m.sku).join('\n'))}">${p.sku_count} 个 SKU：${esc(mem.slice(0, 3).map(m => m.sku).join('、'))}${p.sku_count > 3 ? ' …' : ''}</span>`
+              : `<span class="as-mem1">${esc(mem[0] ? mem[0].sku : p.product)}</span>`;
             if (ledger) {
               const share = a.total_orders ? (p.aftersale / a.total_orders * 100) : 0;
               return `<tr>
                 <td>${esc(p.product)}</td>
+                <td>${memTxt}</td>
                 <td>${p.total}</td>
                 <td>${p.aftersale}</td>
                 <td>${esc(p.top_category || '—')}</td>
@@ -1727,6 +1793,7 @@ function renderAftersale() {
             }
             return `<tr>
               <td>${esc(p.product)}</td>
+              <td>${memTxt}</td>
               <td>${p.total}</td>
               <td>${p.aftersale}</td>
               <td>${(p.rate * 100).toFixed(1)}%</td>
@@ -1823,13 +1890,12 @@ function renderAftersaleSummary(d) {
   const ledger = d.mode === 'ledger';
   const rateTxt = (ov.rate == null) ? '—' : (ov.rate * 100).toFixed(1) + '%';
   const cats = d.categories && d.categories.length ? d.categories : [];
-  const shopList = d.shops || [];
   const rt = $('#asSumRateTitle');
-  if (rt) rt.textContent = ledger ? '各平台 · 各产品售后登记量' : '各平台 · 各产品售后率';
+  if (rt) rt.textContent = ledger ? '各平台 · 各产品族售后登记量' : '各平台 · 各产品族售后率';
   const mt = $('#asSumTitle');
   if (mt) mt.textContent = ledger
-    ? '售后 VOC 总览 · 各平台各产品售后登记量与问题分布'
-    : '售后 VOC 总览 · 各平台各产品售后率与原因分布';
+    ? '售后 VOC 总览 · 各平台各产品族登记量与问题分布'
+    : '售后 VOC 总览 · 各平台各产品族售后率与原因分布';
   const tt = $('#asSumTable');
   if (tt && tt.closest('.as-card')) {
     const h3 = tt.closest('.as-card').querySelector('h3');
@@ -1843,19 +1909,8 @@ function renderAftersaleSummary(d) {
   const rateCell = p => (p.rate == null) ? '—' : (p.rate * 100).toFixed(1) + '%';
   const rateBar = p => (p.rate == null) ? '' :
     `<div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div>`;
-  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '售后率' : '售后率'}</th><th>趋势</th></tr></thead><tbody>` +
+  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品族</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>售后率</th><th>趋势</th></tr></thead><tbody>` +
     d.products.map(p => `<tr><td>${esc(p.platform)}</td><td>${esc(p.product)}</td><td>${p.total}</td><td>${p.aftersale}</td><td>${rateCell(p)}</td><td>${rateBar(p)}</td></tr>`).join('') + `</tbody>`;
-  if (shopList.length) {
-    const el = $('#asSumShops');
-    if (el) {
-      el.innerHTML = `<div class="as-card" style="margin-top:16px">
-        <h3>各子店铺售后分布</h3>
-        <table class="as-table">
-          <thead><tr><th>平台</th><th>子店铺</th><th>登记条数</th></tr></thead>
-          <tbody>${shopList.map(s => `<tr><td>${esc(s.platform)}</td><td>${esc(s.shop)}</td><td>${s.records}</td></tr>`).join('')}</tbody>
-        </table></div>`;
-    }
-  }
   if (typeof echarts !== 'undefined') {
     const bar = echarts.init(document.getElementById('asSumRateChart'));
     state.charts['asSumRateChart'] = bar;
