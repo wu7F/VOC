@@ -29,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from . import auth, llm, pipeline, aftersale as aftersale_module
+from . import auth, llm, pipeline, aftersale as aftersale_module, feishu as feishu_module
 from .paths import config_path, ensure_dirs, web_dir
 from .store import Store, _LOCK as _STORE_LOCK
 
@@ -631,6 +631,125 @@ async def api_upload(
                                                 int(comment_limit), engine), daemon=True)
     t.start()
     return {"id": rec["id"], "name": rec["name"]}
+
+
+# ---------------------------------------------------------------------------
+# 飞书表格数据源：把飞书里的售后明细直接拉进售后 VOC
+# ---------------------------------------------------------------------------
+
+class FeishuPullReq(BaseModel):
+    url: str = ""
+    platform: str = "AmazonCs"
+    category: str = ""
+    dataset_name: str = ""
+    app_id: str = ""
+    app_secret: str = ""
+    dry_run: bool = False
+
+
+class FeishuConfigReq(BaseModel):
+    app_id: str = ""
+    app_secret: str = ""
+
+
+def _feishu_creds(app_id: str = "", app_secret: str = "") -> tuple[str, str, str]:
+    """取凭证：请求里传的 > 环境变量 > 配置文件。返回 (app_id, app_secret, 来源)。"""
+    cfg = feishu_module.load_config(BASE)
+    aid = (app_id or "").strip() or cfg.get("app_id", "")
+    sec = (app_secret or "").strip() or cfg.get("app_secret", "")
+    src = "本次填写" if (app_id or app_secret) else (cfg.get("source") or "未配置")
+    return aid, sec, src
+
+
+def _aftersale_columns(headers: list[str]) -> dict:
+    """用售后管线的同一套别名规则预判列是否可识别（供前端提示）。"""
+    return {
+        "product": aftersale_module._pick_column(headers, "product") or "",
+        "flag": aftersale_module._pick_column(headers, "flag") or "",
+        "reason": aftersale_module._pick_column(headers, "reason") or "",
+    }
+
+
+@app.get("/api/feishu/config")
+def api_feishu_config():
+    """只回传「是否已配置」和 app_id 掩码，绝不回传 secret。"""
+    cfg = feishu_module.load_config(BASE)
+    aid = cfg.get("app_id", "")
+    masked = (aid[:6] + "…" + aid[-4:]) if len(aid) > 12 else (aid[:3] + "…" if aid else "")
+    return {
+        "configured": bool(aid and cfg.get("app_secret")),
+        "app_id_masked": masked,
+        "source": cfg.get("source", ""),
+    }
+
+
+@app.post("/api/feishu/config")
+def api_feishu_config_save(req: FeishuConfigReq):
+    """保存飞书应用凭证（仅当环境变量未配置时才有意义）。"""
+    try:
+        feishu_module.save_config(BASE, req.app_id, req.app_secret)
+    except feishu_module.FeishuError as e:
+        raise HTTPException(400, jsonable_error(str(e)))
+    return {"ok": True}
+
+
+@app.post("/api/feishu/pull")
+def api_feishu_pull(req: FeishuPullReq):
+    """从飞书表格拉取数据。
+
+    dry_run=True  → 只回表头 + 前若干行预览（用于确认列名能不能被识别）；
+    dry_run=False → 转成 CSV 落盘，直接建数据集并跑售后分析。
+    """
+    if not req.url.strip():
+        raise HTTPException(400, jsonable_error("请填写飞书表格链接。"))
+
+    aid, sec, src = _feishu_creds(req.app_id, req.app_secret)
+    if not aid or not sec:
+        raise HTTPException(400, jsonable_error(
+            "尚未配置飞书应用凭证。\n"
+            "请在「飞书接入」里填写自建应用的 app_id / app_secret，"
+            "或让服务器管理员配置环境变量 VOC_FEISHU_APP_ID / VOC_FEISHU_APP_SECRET。"))
+
+    if req.platform not in AFTERSALE_PLATFORMS:
+        raise HTTPException(400, jsonable_error(
+            "飞书表格目前只支持导入到售后 VOC（Amazon售后 / Wayfair售后）。"))
+
+    try:
+        data = feishu_module.fetch_rows(url=req.url, app_id=aid, app_secret=sec)
+    except feishu_module.FeishuError as e:
+        raise HTTPException(400, jsonable_error(str(e)))
+
+    headers = data["headers"]
+    rows = data["rows"]
+
+    if req.dry_run:
+        preview = [[("" if c is None else str(c)) for c in r] for r in rows[:8]]
+        return {
+            "ok": True, "dry_run": True,
+            "kind": data["kind"], "title": data["title"],
+            "row_count": data["row_count"],
+            "headers": headers,
+            "preview": preview,
+            "cred_source": src,
+            "columns": _aftersale_columns(headers),
+        }
+
+    # 正式分析
+    csv_bytes = feishu_module.to_csv(headers, rows)
+    fname = "feishu_%s.csv" % re.sub(r"[^\w\-]+", "_", data["title"] or "sheet")[:40]
+    saved = store.save_upload(fname, csv_bytes)
+    name = req.dataset_name.strip() or ("飞书·%s · %s" % (data["title"] or req.platform,
+                                                          req.category or "售后明细"))
+    rec = store.add(name=name, platform=req.platform,
+                    category=req.category.strip() or "售后明细",
+                    brands="", comment_limit=20,
+                    files=[fname], engine="auto", uploads=[saved])
+    t = threading.Thread(target=_run_aftersale_job,
+                         args=(rec["id"], [saved], req.platform, rec["category"], None),
+                         daemon=True)
+    t.start()
+    return {"ok": True, "id": rec["id"], "name": rec["name"],
+            "row_count": data["row_count"], "cred_source": src}
 
 
 @app.post("/api/datasets/{did}/rerun")

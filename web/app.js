@@ -204,6 +204,7 @@ async function boot() {
   updateGroupUI();
   bindAftersaleUI();
   bindSetupEvents();
+  bindFeishuUI();
   bindResultEvents();
   bindListToolbar();
   bindRecordsBoard();
@@ -548,6 +549,7 @@ function applyPlatform(pid) {
   renderDatasets();
   renderDemos();
   resizeAllCharts();
+  updateFeishuUI();
 }
 
 /* 只更新与平台相关的文案与主题色（不改视图、不重渲染列表） */
@@ -1351,8 +1353,180 @@ async function startAnalysis() {
   }
 }
 
-/* ============================ 进度 ============================ */
+/* ====================== 飞书表格直连（售后 VOC 专用） ====================== */
 
+let fsData = null;   // 最近一次预览结果：{headers, row_count, columns, ...}
+
+/** 飞书卡片只在售后 VOC 平台出现。 */
+function updateFeishuUI() {
+  const plat = state.platforms.find(x => x.id === state.platform) || {};
+  const card = $('#cardFeishu');
+  if (!card) return;
+  const isAs = plat.kind === 'aftersale';
+  card.hidden = !isAs;
+  if (!isAs) {
+    fsData = null;
+    const pv = $('#fsPreview');
+    if (pv) pv.hidden = true;
+    const bs = $('#btnFsStart');
+    if (bs) bs.disabled = true;
+  }
+}
+
+function fsNote(msg, isErr) {
+  const el = $('#fsNote');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'fs-note' + (isErr ? ' err' : '');
+}
+
+function fsCreds() {
+  return {
+    app_id: ($('#fsAppId') && $('#fsAppId').value.trim()) || '',
+    app_secret: ($('#fsAppSecret') && $('#fsAppSecret').value.trim()) || ''
+  };
+}
+
+/** 带结构化错误解析的 POST（后端 detail 可能是对象）。 */
+async function fsPost(path, bodyObj) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bodyObj)
+  });
+  if (!r.ok) {
+    const e = await parseLoginError(r);
+    throw new Error(e.msg || r.statusText);
+  }
+  return await r.json();
+}
+
+async function fsLoadCredState() {
+  const el = $('#fsCredState');
+  if (!el) return;
+  try {
+    const d = await (await api('/api/feishu/config')).json();
+    if (d.configured) {
+      const src = d.source === 'env' ? '环境变量' : '服务器配置';
+      el.textContent = `已配置 ${d.app_id_masked}（来源：${src}）`;
+      el.className = 'fs-ok';
+    } else {
+      el.textContent = '未配置';
+      el.className = 'fs-warn';
+    }
+  } catch (e) { el.textContent = ''; }
+}
+
+function bindFeishuUI() {
+  if (!$('#btnFsPreview')) return;
+  $('#btnFsPreview').onclick = fsPreview;
+  $('#btnFsStart').onclick = fsStart;
+  $('#btnFsSaveCred').onclick = fsSaveCred;
+  fsLoadCredState();
+}
+
+async function fsSaveCred() {
+  const c = fsCreds();
+  if (!c.app_id || !c.app_secret) {
+    fsNote('请同时填写 app_id 和 app_secret', true);
+    return;
+  }
+  try {
+    await fsPost('/api/feishu/config', c);
+    $('#fsAppSecret').value = '';
+    fsNote('凭证已保存到服务器（仅本次填写时生效的字段会被清空）');
+    await fsLoadCredState();
+  } catch (e) {
+    fsNote('保存失败：' + e.message, true);
+  }
+}
+
+function renderFsPreview(d) {
+  const box = $('#fsPreview');
+  const head = d.headers || [];
+  const rows = d.preview || [];
+  let html = `<div class="fs-prev-head">${esc(d.title || '表格')} · ${d.kind === 'bitable' ? '多维表格' : '电子表格'} · 共 <b>${d.row_count}</b> 行数据</div>`;
+  html += '<div class="fs-prev-scroll"><table class="fs-table"><thead><tr>';
+  head.forEach(h => { html += `<th>${esc(h)}</th>`; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr>';
+    for (let i = 0; i < head.length; i++) html += `<td>${esc(r[i])}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<div class="fs-prev-foot">（仅预览前 8 行）</div>';
+  box.innerHTML = html;
+  box.hidden = false;
+}
+
+async function fsPreview() {
+  const url = ($('#fsUrl').value || '').trim();
+  if (!url) { fsNote('请先粘贴飞书表格链接', true); return; }
+  const btn = $('#btnFsPreview');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '读取中…';
+  fsData = null;
+  $('#btnFsStart').disabled = true;
+  try {
+    const d = await fsPost('/api/feishu/pull', {
+      url: url,
+      platform: state.platform,
+      dry_run: true,
+      ...fsCreds()
+    });
+    fsData = d;
+    renderFsPreview(d);
+    const cols = d.columns || {};
+    const miss = [];
+    if (!cols.product) miss.push('产品');
+    if (!cols.flag) miss.push('是否售后');
+    if (miss.length) {
+      fsNote(`已读到 ${d.row_count} 行，但未能识别「${miss.join('、')}」列，请检查表头命名`, true);
+    } else {
+      const reasonTxt = cols.reason
+        ? `售后原因=「${cols.reason}」`
+        : '未识别到「售后原因」列（原因将归为「未注明原因」）';
+      fsNote(`已读到 ${d.row_count} 行 · 识别到 产品=「${cols.product}」 是否售后=「${cols.flag}」 ${reasonTxt}`);
+      $('#btnFsStart').disabled = false;
+    }
+  } catch (e) {
+    fsNote('读取失败：' + e.message, true);
+    $('#fsPreview').hidden = true;
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+
+async function fsStart() {
+  if (!fsData) { fsNote('请先点「读取表格」确认数据', true); return; }
+  const url = ($('#fsUrl').value || '').trim();
+  const btn = $('#btnFsStart');
+  const note = $('#fsRunNote');
+  btn.disabled = true;
+  note.className = 'run-note';
+  note.textContent = '正在从飞书拉取…';
+  try {
+    const d = await fsPost('/api/feishu/pull', {
+      url: url,
+      platform: state.platform,
+      category: ($('#fCategory').value || '').trim(),
+      dataset_name: ($('#fName').value || '').trim(),
+      dry_run: false,
+      ...fsCreds()
+    });
+    note.textContent = `已拉取 ${d.row_count} 行，正在分析…`;
+    await loadDatasets();
+    watchJob(d.id);
+  } catch (e) {
+    btn.disabled = false;
+    note.className = 'run-note err';
+    note.textContent = '导入失败';
+    fsNote('导入失败：' + e.message, true);
+  }
+}
+
+/* ============================ 进度 ============================ */
 function watchJob(id) {
   showView('progress');
   $('#progTitle').textContent = '正在分析…';

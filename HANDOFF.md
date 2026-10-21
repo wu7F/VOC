@@ -64,12 +64,46 @@
 
 ---
 
+## 3.5 飞书表格直连（售后 VOC 数据源）
+
+售后 VOC 现在可以直接从**飞书电子表格 / 多维表格**拉数据，不用再「导出 Excel → 上传」。
+
+**入口**：售后 VOC 平台 → 新建分析页 → 「飞书表格直连」卡片 → 粘贴链接 → 读取表格（先预览表头）→ 导入并分析。
+
+**支持的链接**
+- 电子表格 `https://xxx.feishu.cn/sheets/<spreadsheet_token>?sheet=<sheet_id>`
+- 多维表格 `https://xxx.feishu.cn/base/<app_token>?table=<table_id>`
+- 也接受裸 token（`shtcn…` / `bascn…`）；维基/文档链接不支持
+
+**鉴权**：飞书开放平台**自建应用**的 app_id / app_secret 换 tenant_access_token。
+- 优先读环境变量 `VOC_FEISHU_APP_ID` / `VOC_FEISHU_APP_SECRET`（生产推荐，已接进 docker-compose）
+- 其次读 `data/feishu_config.json`（网页上「飞书应用凭证」里填过一次会存到这儿，文件权限 0600）
+- 需要的权限：`sheets:spreadsheet:readonly`（电子表格）或 `bitable:app:readonly`（多维表格），并把目标表格授权给该应用
+
+**代码位置**
+| 文件 | 作用 |
+|---|---|
+| `server/feishu.py` | 链接解析、token 缓存、取数（sheets v2 values / bitable v1 records）、转 CSV、凭证读写 |
+| `server/app.py` | `GET /api/feishu/config`、`POST /api/feishu/config`、`POST /api/feishu/pull` |
+| `web/index.html` | `#cardFeishu` 卡片（仅售后 VOC 平台显示） |
+| `web/app.js` | `updateFeishuUI / bindFeishuUI / fsPreview / fsStart / fsSaveCred` |
+| `web/style.css` | `.fs-*` 样式 |
+
+**实现要点**
+- 只用标准库 `urllib`，不新增依赖
+- 数据流：飞书 → 二维数组 → UTF-8(BOM) CSV → 落盘 → 复用现有 `run_aftersale` 管线，**不改动售后分析逻辑本身**
+- `dry_run=True` 时只返回表头 + 前 8 行预览，并用售后管线同一套别名规则预判「产品/是否售后/售后原因」三列能否识别
+- 目前**只允许导入到售后 VOC**（Amazon售后 / Wayfair售后），传其它平台会 400 拒绝
+
+---
+
 ## 4. 代码结构
 
 ```
 server/           后端（FastAPI）
   app.py          入口路由 + PLATFORMS 定义 + 任务调度（_run_job / _run_aftersale_job）
   aftersale.py    售后独立聚合管线（新增）
+  feishu.py       飞书表格数据源（电子表格/多维表格 → CSV）
   store.py        数据集存储（注意：锁是模块级 _LOCK，不是实例属性）
   auth.py         邮箱账号制登录、限流（8 次错锁 5 分钟）
   pipeline.py     评论洞察管线

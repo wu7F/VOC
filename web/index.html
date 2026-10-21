@@ -106,6 +106,44 @@
           <div class="file-list" id="fileList"></div>
         </div>
 
+        <div class="card fs-card" id="cardFeishu" hidden>
+          <div class="card-head">
+            <div class="card-title">飞书表格直连 <em class="fs-tag">售后VOC 专用</em></div>
+            <div class="card-sub">不用导出 Excel，直接从飞书电子表格 / 多维表格拉取售后明细</div>
+          </div>
+
+          <div class="fs-row">
+            <input type="text" id="fsUrl" class="fs-input"
+                   placeholder="粘贴飞书表格链接，如 https://xxx.feishu.cn/sheets/shtcnXXXX">
+            <button class="btn-ghost" id="btnFsPreview">读取表格</button>
+          </div>
+          <div class="fs-note" id="fsNote">读取后先预览表头，确认「产品 / 是否售后 / 售后原因」三列能被识别再分析。</div>
+
+          <div class="fs-preview" id="fsPreview" hidden></div>
+
+          <details class="fs-cred">
+            <summary>飞书应用凭证 <span id="fsCredState"></span></summary>
+            <div class="fs-cred-body">
+              <p class="fs-hint">
+                需要一个飞书<strong>自建应用</strong>的 app_id / app_secret，并开通
+                <code>sheets:spreadsheet:readonly</code>（电子表格）或
+                <code>bitable:app:readonly</code>（多维表格）权限，再把目标表格授权给该应用。
+              </p>
+              <div class="fs-row">
+                <input type="text" id="fsAppId" class="fs-input" placeholder="app_id（cli_xxx）">
+                <input type="password" id="fsAppSecret" class="fs-input" placeholder="app_secret">
+                <button class="btn-ghost" id="btnFsSaveCred">保存</button>
+              </div>
+              <p class="fs-hint">若服务器已配置环境变量 VOC_FEISHU_APP_ID / VOC_FEISHU_APP_SECRET，则此处无需填写。</p>
+            </div>
+          </details>
+
+          <div class="fs-actions">
+            <button class="btn-primary" id="btnFsStart" disabled>从飞书导入并分析</button>
+            <span class="run-note" id="fsRunNote"></span>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-head">
             <div class="card-title">2 · 分析配置</div>

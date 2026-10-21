@@ -29,6 +29,9 @@ services:
       # 首次启动自动建账号（accounts.json 不存在时生效，之后改了也不覆盖）
       VOC_PASSWORD: "${VOC_PASSWORD:-}"
       VOC_PASSWORD_EMAIL: "${VOC_PASSWORD_EMAIL:-}"
+      # 飞书表格数据源（售后VOC 直连）。不配也能在网页上临时填写凭证。
+      VOC_FEISHU_APP_ID: "${VOC_FEISHU_APP_ID:-}"
+      VOC_FEISHU_APP_SECRET: "${VOC_FEISHU_APP_SECRET:-}"
     volumes:
       - voc_data:/data
     healthcheck:
