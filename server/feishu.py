@@ -569,6 +569,19 @@ def load_config(data_dir: Path) -> dict:
     return cfg
 
 
+def clear_config(data_dir: Path) -> bool:
+    """删除已保存的凭证（换应用或清理误填时用）。"""
+    p = _config_path(data_dir)
+    _TOKENS.clear()
+    if p.is_file():
+        try:
+            p.unlink()
+            return True
+        except Exception:
+            return False
+    return False
+
+
 def save_config(data_dir: Path, app_id: str, app_secret: str) -> dict:
     """把凭证存到 data 目录（仅当环境变量未配置时才需要）。"""
     app_id = (app_id or "").strip()

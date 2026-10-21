@@ -733,6 +733,18 @@ def api_feishu_config():
     }
 
 
+@app.delete("/api/feishu/config")
+def api_feishu_config_clear():
+    """清除已保存的飞书凭证（换应用 / 清理误填）。环境变量配置的无法通过此处清除。"""
+    cfg = feishu_module.load_config(BASE)
+    if cfg.get("source") == "env":
+        raise HTTPException(400, jsonable_error(
+            "当前凭证来自服务器环境变量（VOC_FEISHU_APP_ID / VOC_FEISHU_APP_SECRET），"
+            "请在服务器的 .env 或 docker-compose 里删除。"))
+    ok = feishu_module.clear_config(BASE)
+    return {"ok": True, "cleared": ok}
+
+
 # ---------------------------------------------------------------------------
 # 飞书数据源：表格变更后看板自动刷新，无需再上传文件
 # ---------------------------------------------------------------------------

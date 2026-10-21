@@ -1516,6 +1516,7 @@ function bindFeishuUI() {
   $('#btnFsPreview').onclick = fsPreview;
   $('#btnFsStart').onclick = fsStart;
   $('#btnFsSaveCred').onclick = fsSaveCred;
+  $('#btnFsClearCred').onclick = fsClearCred;
   // 平台下拉
   const sel = $('#fsPlatform');
   if (sel) {
@@ -1540,6 +1541,23 @@ async function fsSaveCred() {
     await fsLoadCredState();
   } catch (e) {
     fsNote('保存失败：' + e.message, true);
+  }
+}
+
+async function fsClearCred() {
+  if (!confirm('清除服务器上已保存的飞书凭证？\n（之后要重新填写才能同步）')) return;
+  try {
+    const r = await fetch('/api/feishu/config', { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const e = await parseLoginError(r, 0).catch(() => null);
+      fsNote((d && (d.detail || d.message)) || '清除失败', true);
+      return;
+    }
+    fsNote('已清除服务器上的飞书凭证');
+    await fsLoadCredState();
+  } catch (e) {
+    fsNote('清除失败：' + e.message, true);
   }
 }
 
