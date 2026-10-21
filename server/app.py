@@ -58,6 +58,7 @@ app = FastAPI(title="VOC 洞察平台", version="1.0")
 
 PUBLIC_PATHS = {"/", "/index.html", "/app.js", "/style.css", "/login.css",
                 "/vendor/echarts.min.js", "/favicon.ico",
+                "/feishu-guide.html",
                 "/api/health", "/api/auth/login", "/api/auth/status",
                 "/api/auth/me"}
 
