@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞书数据源配置指引 · VOC 洞察平台</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --surface:#fff; --surface-2:#fafbfc;
+    --border:#e5e7eb; --border-strong:#d5d8de;
+    --text:#15181d; --text-2:#4b5563; --text-3:#8b93a1;
+    --accent:#2f6df6; --accent-soft:rgba(47,109,246,.09);
+    --pos:#16a34a; --neg:#e5484d; --neu:#94a3b8;
+    --radius:12px; --radius-sm:8px; --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:14px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",
+         "Microsoft YaHei",Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 72px}
+  .head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;
+        display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+  h1{font-size:22px;margin:0;font-weight:700}
+  .sub{color:var(--text-3);font-size:13px;margin:0 0 22px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+        padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+  h2{font-size:15px;margin:0 0 12px;font-weight:650}
+  .why{background:var(--accent-soft);border:1px solid var(--border);
+       border-left:3px solid var(--accent);border-radius:var(--radius-sm);
+       padding:12px 14px;font-size:13px;color:var(--text-2);line-height:1.8}
+  .why b{color:var(--text)}
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:0}
+  ol.steps > li{counter-increment:s;position:relative;padding:0 0 22px 40px}
+  ol.steps > li:last-child{padding-bottom:0}
+  ol.steps > li::before{
+    content:counter(s);position:absolute;left:0;top:1px;width:26px;height:26px;
+    border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  ol.steps > li::after{
+    content:"";position:absolute;left:13px;top:30px;bottom:2px;width:1px;background:var(--border)}
+  ol.steps > li:last-child::after{display:none}
+  .st-title{font-weight:650;font-size:14px;margin-bottom:3px}
+  .st-body{font-size:13px;color:var(--text-2);line-height:1.8}
+  .st-body a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-ring)}
+  code{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;
+       padding:1px 6px;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text)}
+  .path{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+        padding:10px 13px;margin:9px 0;font-size:12.5px;color:var(--text-2);
+        font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.9}
+  .path .k{color:var(--text-3)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--surface-2);font-weight:600;font-size:12.5px;color:var(--text-2)}
+  .tip{background:#fff8e6;border:1px solid #f5dfa8;border-radius:var(--radius-sm);
+       padding:11px 13px;font-size:12.5px;color:#7a5b12;margin-top:10px;line-height:1.8}
+  .tip b{color:#5c4408}
+  .ok{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius-sm);
+      padding:11px 13px;font-size:12.5px;color:#14532d;margin-top:10px;line-height:1.8}
+  .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+       padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;margin-top:6px}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--border-strong)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.two{grid-template-columns:1fr}}
+  .mini{font-size:12.5px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="logo">VOC</div>
+    <div><h1>飞书数据源配置指引</h1></div>
+  </div>
+  <p class="sub">VOC 洞察平台 · 售后 VOC · 让看板随飞书表格自动更新（服务器端运行，不依赖任何人的电脑开机）</p>
+
+  <div class="card">
+    <div class="why">
+      <b>为什么要配这个？</b><br>
+      平台要直接从飞书读取售后表格，需要一个「飞书自建应用」作为身份凭证。
+      配好之后，<b>平台服务器</b>会按你设的间隔自动去拉表格、重新分析、刷新看板 ——
+      你的电脑关机、公司网络断开都不影响。<br>
+      全程约 5 分钟，只需要做一次。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>配置步骤</h2>
+    <ol class="steps">
+      <li>
+        <div class="st-title">创建企业自建应用</div>
+        <div class="st-body">
+          打开开发者后台 → 点「创建企业自建应用」→ 随便起个名字（比如 <code>VOC 洞察平台</code>），选好企业后创建。
+          <div class="path"><span class="k">→</span> https://open.feishu.cn/app</div>
+        </div>
+      </li>
+      <li>
+        <div class="st-title">申请读取表格的权限</div>
+        <div class="st-body">
+          在应用后台左侧「权限管理」→ 搜索并开通下面两个权限（表格类型决定开哪个，两个都开也行）：
+          <table>
+            <tr><th>权限标识</th><th>用途</th></tr>
+            <tr><td><code>sheets:spreadsheet:readonly</code></td><td>读「电子表格」（你的两个链接之一是这种）</td></tr>
+            <tr><td><code>bitable:app:readonly</code></td><td>读「多维表格 Base」</td></tr>
+          </table>
+          <div class="tip">
+            <b>注意：</b>权限申请完还必须走下一步「发布版本」才会生效，只申请不发布是没用的。
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="st-title">发布版本</div>
+        <div class="st-body">
+          左侧「版本管理与发布」→ 创建版本 → 填个版本号（如 <code>1.0.0</code>）→ 发布。
+          部分企业需要管理员审核，审核通过后权限即生效。
+        </div>
+      </li>
+      <li>
+        <div class="st-title">把目标表格授权给应用</div>
+        <div class="st-body">
+          打开你要接入的飞书表格 → 右上角「分享」→ 「添加协作者」→ 搜索你刚创建的应用名称 → 添加为**可编辑**协作者。<br>
+          <span class="mini">应用必须被单独授权，仅「在文档里提到它」或同在一个空间是不够的。</span>
+        </div>
+      </li>
+      <li>
+        <div class="st-title">拿到 app_id / app_secret</div>
+        <div class="st-body">
+          左侧「凭证与基础信息」→ 就能看到 <code>App ID</code>（形如 <code>cli_xxxxxxxx</code>）和 <code>App Secret</code>。
+          <div class="tip"><b>App Secret 是敏感信息</b>，不要发到聊天群里、不要贴进代码仓库。</div>
+        </div>
+      </li>
+      <li>
+        <div class="st-title">填进平台并保存</div>
+        <div class="st-body">
+          回到平台 → 售后 VOC → <b>Amazon售后</b> 标签 → 「飞书数据源」卡片 → 展开「飞书应用凭证」→
+          填入 app_id / app_secret → 点「保存」。<br>
+          然后在同一个卡片里：
+          <ul style="margin:8px 0 0;padding-left:20px">
+            <li>「粘贴飞书表格链接」→ 填你的电子表格链接</li>
+            <li>「数据源名称」→ 如「亚马逊店铺1 · GN品牌售后登记」</li>
+            <li>「自动同步间隔」→ 分钟数，建议 <b>30</b>（半小时一次）</li>
+            <li>点「保存数据源并立即同步」</li>
+          </ul>
+          <div class="ok">
+            <b>验证成功的样子：</b>数据源列表出现该条目、状态为 <code>ok</code>，
+            上方显示「刚刚同步」，消息是「完成 · N 条售后登记 · 台账模式…」；
+            点顶部「售后VOC」直接进看板，数据已是最新。
+          </div>
+          <a class="btn" href="/">← 返回平台</a>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>常见问题</h2>
+    <div class="two">
+      <div>
+        <p class="st-title" style="font-weight:650">报「尚未配置飞书应用凭证」</p>
+        <p class="mini" style="color:var(--text-2)">凭证没填或没保存成功。展开「飞书应用凭证」填 app_id + app_secret，点「保存」。</p>
+      </div>
+      <div>
+        <p class="st-title" style="font-weight:650">报 99991663 / permission denied</p>
+        <p class="mini" style="color:var(--text-2)">应用没有该表格的权限。回第 4 步，在表格「分享」里把应用加为协作者。</p>
+      </div>
+      <div>
+        <p class="st-title" style="font-weight:650">报 permission denied（权限维度）</p>
+        <p class="mini" style="color:var(--text-2)">权限没申请或没发版生效。回第 2、3 步，开通权限并发布版本。</p>
+      </div>
+      <div>
+        <p class="st-title" style="font-weight:650">表格读出来是空的</p>
+        <p class="mini" style="color:var(--text-2)">检查表格里第一行是不是真表头（说明行/空行会被自动跳过），以及「产品」列能否被识别。</p>
+      </div>
+    </div>
+    <p class="mini" style="margin-top:14px">
+      另：服务器也可以用环境变量 <code>VOC_FEISHU_APP_ID</code> / <code>VOC_FEISHU_APP_SECRET</code> 配置，
+      这样多人使用同一套凭证、且不必在网页上重复填写。
+    </p>
+  </div>
+</div>
+</body>
+</html>

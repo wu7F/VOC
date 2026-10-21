@@ -1033,3 +1033,9 @@ table.tbl tr.clickable { cursor: pointer; }
   vertical-align: bottom;
 }
 .as-mem1 { font-size: 12px; color: var(--text-3); }
+
+.fs-guide-link {
+  color: var(--accent); text-decoration: none;
+  border-bottom: 1px solid var(--accent-ring); cursor: pointer;
+}
+.fs-guide-link:hover { border-bottom-color: var(--accent); }

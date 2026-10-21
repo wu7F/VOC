@@ -299,6 +299,16 @@ def style_css():
                         headers={"Cache-Control": _nocache()})
 
 
+@app.get("/feishu-guide.html")
+def feishu_guide():
+    """飞书数据源配置指引（自助，照着点即可）。"""
+    p = WEB / "feishu-guide.html"
+    if not p.exists():
+        raise HTTPException(404, "指引页不存在")
+    return FileResponse(p, media_type="text/html; charset=utf-8",
+                        headers={"Cache-Control": _nocache()})
+
+
 @app.get("/login.css")
 def login_css():
     return FileResponse(WEB / "login.css", media_type="text/css",
