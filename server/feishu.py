@@ -76,6 +76,26 @@ def parse_feishu_url(raw: str) -> dict:
             "sheet_id": "",
         }
 
+    # 知识库节点（wiki）—— 背后通常是电子表格，需要再解析一层拿 obj_token
+    m = re.search(r"/wiki/([A-Za-z0-9]+)", path)
+    if m:
+        return {
+            "kind": "wiki",
+            "token": m.group(1),
+            "sheet_id": "",
+            "table_id": "",
+        }
+
+    # 云空间文件（上传的 xlsx/csv 等）
+    m = re.search(r"/file/([A-Za-z0-9]+)", path)
+    if m:
+        return {
+            "kind": "file",
+            "token": m.group(1),
+            "sheet_id": "",
+            "table_id": "",
+        }
+
     # 电子表格 Sheets
     m = re.search(r"/sheets/([A-Za-z0-9]+)", path)
     if m:
@@ -89,10 +109,12 @@ def parse_feishu_url(raw: str) -> dict:
 
     # 维基 / 文档 / drive 文件夹等，本模块不支持
     raise FeishuError(
-        "只支持「电子表格」和「多维表格」链接。\n"
-        "请在飞书里点开表格 → 分享 → 复制链接，形如：\n"
-        "  https://xxx.feishu.cn/sheets/xxxxxxxx  （电子表格）\n"
-        "  https://xxx.feishu.cn/base/xxxxxxxx   （多维表格）")
+        "认不出这个链接。支持这几种：\n"
+        "  https://xxx.feishu.cn/sheets/xxx   电子表格\n"
+        "  https://xxx.feishu.cn/wiki/xxx     知识库里的表格\n"
+        "  https://xxx.feishu.cn/base/xxx     多维表格\n"
+        "  https://xxx.feishu.cn/file/xxx     云空间里的文件（xlsx/csv）\n"
+        "请在飞书里打开目标表格 → 分享 → 复制链接，粘贴到上面。")
 
 
 # ---------------------------------------------------------------- HTTP
@@ -351,32 +373,115 @@ def fetch_bitable_rows(token: str, app_token: str, table_id: str = "") -> tuple[
     return rows, title or table_id
 
 
+def resolve_wiki_node(token: str, app_id: str, app_secret: str) -> tuple[str, str, str]:
+    """解析知识库节点 → (obj_type, obj_token, title)。
+
+    飞书里「知识库里的电子表格」分享出来是 /wiki/<node_token> 链接，
+    真正的表格 token 要通过 wiki 接口换一下。
+    需要权限：wiki:wiki:readonly
+    """
+    tk = get_tenant_token(app_id, app_secret)
+    j = _http_json(
+        "%s/wiki/v2/spaces/get_node?token=%s" % (_OPEN, urllib.parse.quote(token)),
+        headers={"Authorization": "Bearer " + tk},
+    )
+    node = (j.get("data") or {}).get("node") or {}
+    obj_type = node.get("obj_type") or ""
+    obj_token = node.get("obj_token") or ""
+    title = node.get("title") or ""
+    if not obj_token:
+        raise FeishuError("无法解析这个知识库链接（可能是没有访问权限）。")
+    return obj_type, obj_token, title
+
+
+def download_drive_file(token: str, app_id: str, app_secret: str, dest: Path) -> str:
+    """下载云空间文件（xlsx/csv…）到本地，返回文件名。
+
+    需要权限：drive:drive:readonly、drive:file:download
+    """
+    tk = get_tenant_token(app_id, app_secret)
+    q = urllib.parse.quote(token)
+    j = _http_json("%s/drive/v1/files/%s" % (_OPEN, q),
+                   headers={"Authorization": "Bearer " + tk})
+    meta = (j.get("data") or {}).get("meta") or {}
+    name = meta.get("title") or "feishu_file"
+    req = urllib.request.Request(
+        "%s/drive/v1/files/%s/download" % (_OPEN, q),
+        headers={"Authorization": "Bearer " + tk})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        data = r.read()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return name
+
+
 def fetch_rows(*, url: str, app_id: str, app_secret: str) -> dict:
     """入口：解析链接 → 鉴权 → 取数。
 
     返回 {headers, rows, kind, title, source}
     rows 统一为 list[dict]（各 sheet 表头不同也没关系，列名取并集）。
+    支持：电子表格 / 多维表格 / 知识库节点(wiki) / 云空间文件(file)。
     """
     info = parse_feishu_url(url)
-    token = get_tenant_token(app_id, app_secret)
-    if info["kind"] == "sheets":
-        headers, rows, used = fetch_all_sheets(token, info["token"])
-        title = info["token"]
-        # 用第一个 sheet 名做标题
+    kind = info["kind"]
+
+    # 知识库节点 → 先换成真实对象
+    if kind == "wiki":
+        obj_type, obj_token, wiki_title = resolve_wiki_node(
+            info["token"], app_id, app_secret)
+        if obj_type == "sheet":
+            kind, token = "sheets", obj_token
+        elif obj_type == "bitable":
+            kind, token = "bitable", obj_token
+        else:
+            _T = {"docx": "文档", "doc": "文档", "mindnote": "思维导图",
+                  "file": "云空间文件", "slides": "幻灯片"}
+            raise FeishuError(
+                "这个知识库链接指向的是%s，不是电子表格或多维表格。"
+                "请在飞书里打开它 → 分享 → 复制「电子表格」形式的链接。"
+                % _T.get(obj_type, obj_type or "未知类型"))
+    else:
+        token = info["token"]
+
+    if kind == "sheets":
+        headers, rows, used = fetch_all_sheets(
+            get_tenant_token(app_id, app_secret), token)
+        title = token
         try:
-            sheets = _sheets_of(token, info["token"])
+            sheets = _sheets_of(get_tenant_token(app_id, app_secret), token)
             if sheets:
-                title = sheets[0].get("title") or info["token"]
+                title = sheets[0].get("title") or token
         except FeishuError:
             pass
         source = " + ".join(used)
-    else:
-        values, title = fetch_bitable_rows(token, info["token"], info.get("table_id", ""))
+    elif kind == "bitable":
+        tk = get_tenant_token(app_id, app_secret)
+        values, title = fetch_bitable_rows(tk, token, info.get("table_id", ""))
         headers, rows = _rows_from_values(values)
         source = title
+    elif kind == "file":
+        import tempfile
+        tmpdir = Path(tempfile.mkdtemp(prefix="voc_feishu_"))
+        fname = download_drive_file(token, app_id, app_secret, tmpdir / "f.xlsx")
+        suffix = Path(fname).suffix or ".xlsx"
+        real = tmpdir / ("f" + suffix)
+        if real != tmpdir / "f.xlsx":
+            real.write_bytes((tmpdir / "f.xlsx").read_bytes())
+        rows, source = adapters.read_table(real, multi_sheet=True)
+        headers = []
+        for r in rows:
+            for k in r.keys():
+                if k not in headers:
+                    headers.append(k)
+        title = fname
+    else:
+        raise FeishuError("不支持的链接类型。")
+
+    if not rows:
+        raise FeishuError("表格里没有读到任何数据行。")
 
     return {
-        "kind": info["kind"],
+        "kind": kind,
         "title": title,
         "headers": headers,
         "rows": rows,
