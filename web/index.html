@@ -122,8 +122,14 @@
           <div class="fs-row">
             <input type="text" id="fsName" class="fs-input" placeholder="数据源名称，如：亚马逊店铺1 · GN品牌售后登记">
             <select id="fsPlatform" class="fs-input" style="max-width:150px"></select>
-            <input type="number" id="fsInterval" class="fs-input" style="max-width:110px"
-                   value="30" min="1" title="自动同步间隔（分钟）">
+            <select id="fsInterval" class="fs-input" style="max-width:130px" title="自动更新间隔">
+              <option value="30">每 30 分钟</option>
+              <option value="60">每小时</option>
+              <option value="360">每 6 小时</option>
+              <option value="1440">每天</option>
+              <option value="10080">每周</option>
+              <option value="20160" selected>每 2 周</option>
+            </select>
           </div>
           <div class="fs-note" id="fsNote">读取后先预览表头，确认「产品 / 是否售后 / 售后原因」三列能被识别再分析。</div>
 

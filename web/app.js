@@ -1482,7 +1482,7 @@ async function fsRenderSources() {
       <div class="fs-src-main">
         <div class="fs-src-name">${esc(s.name || '未命名')}</div>
         <div class="fs-src-meta"><span class="${st}">${esc(s.last_status || '未同步')}</span>
-          · ${esc(t)} · 每 ${s.interval_min || 30} 分钟自动刷新 · ${esc(s.platform)}</div>
+          · ${esc(t)} · 每 ${esc(fmtInterval(s.interval_min || 30))}自动更新 · ${esc(s.platform)}</div>
         ${s.last_message ? `<div class="fs-src-msg">${esc(s.last_message)}</div>` : ''}
       </div>
       <div class="fs-src-acts">
@@ -1777,11 +1777,7 @@ function renderAftersale() {
   $$('.panel').forEach(p => p.hidden = p.id !== 'panel-overview');
 
   const html = `
-    ${ledger ? `<div class="as-note">
-      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，没有全量订单数做分母，
-      因此<b>不计算售后率</b>。下面展示的是售后<b>登记量</b>、各店铺分布与产品集中度。
-      ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
-    </div>` : ''}
+    <div id="asFresh" class="as-fresh" hidden></div>
     <div class="as-kpis">
       <div class="as-kpi"><div class="as-kpi-v">${a.total_orders}</div><div class="as-kpi-l">${cntLabel}</div></div>
       <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">${asLabel}</div></div>
@@ -1790,9 +1786,30 @@ function renderAftersale() {
       <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">产品族</div></div>
       ${mergedSkus ? `<div class="as-kpi"><div class="as-kpi-v">${mergedSkus}</div><div class="as-kpi-l">合并的相似 SKU</div></div>` : ''}
     </div>
+    ${shops.length ? `
+    <div class="as-card">
+      <h3>各店铺售后 <em class="as-hint">点一张卡片看该店的产品明细</em>
+        ${state.asShop ? `<button class="btn-ghost as-clear" id="asClearShopTop">显示全部</button>` : ''}</h3>
+      <div class="as-shop-grid">
+        ${shops.map(s => {
+          const top3 = (s.products || []).slice(0, 3)
+            .map(p => `${p.product}(${p.count})`).join(' · ') || '—';
+          return `<button class="as-shop-card${state.asShop === s.shop ? ' sel' : ''}" data-shop="${esc(s.shop)}">
+            <div class="sc-head">
+              <span class="sc-name">${esc(s.shop)}</span>
+              <span class="sc-share">${(s.share * 100).toFixed(1)}%</span>
+            </div>
+            <div class="sc-num">${s.aftersale}<em>条</em></div>
+            <div class="sc-sub">${s.product_count} 个产品 · ${esc(s.top_category || '—')}</div>
+            <div class="sc-top3">${esc(top3)}</div>
+            <div class="sc-bar"><i style="width:${Math.min(100, s.share * 100).toFixed(1)}%"></i></div>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
     <div class="as-grid">
       <div class="as-card">
-        <h3>${shops.length ? '各店铺售后分布' : (ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率')}</h3>
+        <h3>${shops.length ? '各店铺售后占比' : (ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率')}</h3>
         <div id="asRateChart" class="chart-380"></div>
       </div>
       <div class="as-card">
@@ -1800,44 +1817,90 @@ function renderAftersale() {
         <div id="asReasonChart" class="chart-380"></div>
       </div>
     </div>
-    ${shops.length ? `
-    <div class="as-card">
-      <h3>各店铺售后明细 <em class="as-hint">点一行可筛选下方产品明细</em></h3>
-      <table class="as-table as-shop-table">
-        <thead><tr><th>店铺</th><th>售后条数</th><th>占比</th><th>涉及产品</th><th>主要问题</th><th>TOP 产品</th><th>分布</th></tr></thead>
-        <tbody>
-          ${shops.map(s => {
-            const top = (s.products || []).slice(0, 3)
-              .map(p => `${p.product}(${p.count})`).join('、') || '—';
-            return `<tr data-shop="${esc(s.shop)}" class="as-shop-row">
-              <td><b>${esc(s.shop)}</b></td>
-              <td>${s.aftersale}</td>
-              <td>${(s.share * 100).toFixed(1)}%</td>
-              <td>${s.product_count}</td>
-              <td>${esc(s.top_category || '—')}</td>
-              <td class="as-reasons">${esc(top)}</td>
-              <td><div class="bar"><i style="width:${Math.min(100, s.share * 100).toFixed(1)}%"></i></div></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
-    <div class="as-card" id="asProdWrap"></div>`;
+    <div class="as-card" id="asProdWrap"></div>
+    ${ledger ? `<div class="as-note">
+      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，没有全量订单数做分母，
+      因此<b>不计算售后率</b>，展示的是售后<b>登记量</b>与各店铺/产品的分布。
+      ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
+    </div>` : ''}`;
   $('#panel-overview').innerHTML = html;
   renderAsProducts(a, state.asShop || '');
-  // 店铺行 → 筛选产品明细
-  $$('#panel-overview .as-shop-row').forEach(tr => {
-    tr.onclick = () => {
-      const name = tr.dataset.shop || '';
+  renderAsFresh();           // 更新状态条（上次同步 / 下次自动更新 / 立即更新）
+  // 店铺卡片 → 筛选产品明细
+  $$('#panel-overview .as-shop-card').forEach(card => {
+    card.onclick = () => {
+      const name = card.dataset.shop || '';
       state.asShop = (state.asShop === name) ? '' : name;
-      $$('#panel-overview .as-shop-row').forEach(x => x.classList.toggle('sel', x.dataset.shop === state.asShop));
+      $$('#panel-overview .as-shop-card').forEach(x => x.classList.toggle('sel', x.dataset.shop === state.asShop));
       renderAsProducts(a, state.asShop);
+      const clr = $('#asClearShopTop');
+      if (clr) clr.hidden = !state.asShop;
     };
-    if (tr.dataset.shop === state.asShop) tr.classList.add('sel');
   });
+  const topClr = $('#asClearShopTop');
+  if (topClr) topClr.onclick = () => {
+    state.asShop = '';
+    $$('#panel-overview .as-shop-card').forEach(x => x.classList.remove('sel'));
+    renderAsProducts(a, '');
+    topClr.hidden = true;
+  };
   // 复用主题色
   document.documentElement.style.setProperty('--accent', color);
   setTimeout(() => { renderAsCharts(a, color); resizeAllCharts(); }, 60);
+}
+
+/** 把「每分钟数」说成人话 */
+function fmtInterval(min) {
+  const m = parseInt(min, 10) || 0;
+  if (m && m % 20160 === 0) return (m / 20160) + ' 个月';
+  if (m && m % 10080 === 0) return (m / 10080) + ' 周';
+  if (m && m % 1440 === 0) return (m / 1440) + ' 天';
+  if (m && m % 60 === 0) return (m / 60) + ' 小时';
+  return m + ' 分钟';
+}
+
+/** 数据新鲜度条：这个数据集若来自飞书源，说明上次/下次自动更新，并给「立即更新」 */
+async function renderAsFresh() {
+  const el = $('#asFresh');
+  if (!el) return;
+  let src = null;
+  try {
+    const d = await (await api('/api/feishu/sources')).json();
+    state.feishuSources = d.sources || [];
+    const cid = (state.current || {}).id;
+    src = state.feishuSources.find(s => s.dataset_id === cid);
+  } catch (e) { el.hidden = true; return; }
+  if (!src) { el.hidden = true; return; }
+
+  const fmt = t => t
+    ? new Date(t * 1000).toLocaleString('zh-CN',
+        { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+    : '尚未同步';
+  const iv = src.interval_min || 30;
+  const nextAt = src.last_sync_at ? src.last_sync_at + iv * 60 : null;
+  el.hidden = false;
+  el.innerHTML = `
+    <span class="fr-dot"></span>
+    <b>${esc(src.name || '飞书数据源')}</b>
+    <span>上次更新 ${esc(fmt(src.last_sync_at))}</span>
+    <span class="fr-sep">·</span>
+    <span>每 ${esc(fmtInterval(iv))}自动更新</span>
+    <span class="fr-sep">·</span>
+    <span>下次约 ${esc(fmt(nextAt))}</span>
+    <button class="btn-ghost fr-btn" id="asSyncNow">立即更新</button>`;
+  const btn = $('#asSyncNow');
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '更新中…';
+    try {
+      const out = await api(`/api/feishu/sources/${src.id}/sync`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (out && out.ok && out.dataset_id) { await openDataset(out.dataset_id); return; }
+      btn.textContent = '更新失败';
+    } catch (e) { btn.textContent = '更新失败'; }
+    setTimeout(() => { btn.disabled = false; btn.textContent = old; }, 2500);
+  };
 }
 
 /** 产品族明细：选了店铺就只看该店，并把「占本店 / 占该产品」两个口径一起给出 */
@@ -1887,15 +1950,8 @@ function renderAsProducts(a, shop) {
   }
 
   wrap.innerHTML = `
-    <h3>${s ? `「${esc(s.shop)}」产品族明细` : (ledger ? '各产品族售后明细' : '各产品族售后率明细')}
-      ${s ? `<button class="btn-ghost as-clear" id="asClearShop">显示全部产品</button>` : ''}</h3>
+    <h3>${s ? `「${esc(s.shop)}」产品族明细` : (ledger ? '各产品族售后明细' : '各产品族售后率明细')}</h3>
     <table class="as-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
-  const clr = $('#asClearShop');
-  if (clr) clr.onclick = () => {
-    state.asShop = '';
-    $$('#panel-overview .as-shop-row').forEach(x => x.classList.remove('sel'));
-    renderAsProducts(a, '');
-  };
 }
 
 function renderAsCharts(a, color) {
