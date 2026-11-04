@@ -518,7 +518,14 @@ function renderPlatformTabs() {
     `<button data-p="${esc(p.id)}" class="${p.id === state.platform ? 'active' : ''}">${esc(p.label_cn || p.name)}</button>`
   ).join('');
   $$('#platformTabs button').forEach(b => {
-    b.onclick = () => { state.platform = b.dataset.p; applyPlatform(state.platform); };
+    b.onclick = () => {
+      const pid = b.dataset.p;
+      state.platform = pid;
+      applyPlatform(pid);
+      // 售后平台：点子标签也要直接进该平台的售后看板，而不是停在新建分析表单
+      const p = state.platforms.find(x => x.id === pid);
+      if (p && p.kind === 'aftersale') openAftersaleOverview(pid);
+    };
   });
 }
 
@@ -535,42 +542,59 @@ function applyGroup(g) {
 }
 
 /* 售后VOC 父板块落地页：优先用飞书数据源（到期自动同步），否则打开最新报告 */
-async function openAftersaleOverview() {
+async function openAftersaleOverview(pid) {
+  // 目标平台：优先用传入的（点子标签时），否则用当前平台
+  const want = pid || state.platform;
+  const asPids = state.platforms.filter(p => p.kind === 'aftersale').map(p => p.id);
+  const newest = arr => arr.slice().sort(
+    (a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
   try {
-    // 1) 飞书数据源优先
-    const fs = await (await api('/api/feishu/sources')).json();
-    state.feishuSources = fs.sources || [];
-    state.feishuCred = fs;
-    const src = state.feishuSources.find(s => s.platform !== 'WayfairCs');
-    if (src) {
-      const last = src.last_sync_at ? (Date.now() / 1000 - src.last_sync_at) / 60 : 1e9;
-      const iv = src.interval_min || 30;
-      if (src.auto_sync !== false && last > iv) {
-        // 到期 → 先同步再展示（看板内容始终是最新的）
-        await api(`/api/feishu/sources/${src.id}/sync`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-        await loadDatasets();
+    // 0) 先刷新数据集列表 —— 否则 state.datasets 可能是旧的/空的，
+    //    就会出现"明明左侧有报告，主区域却是新建分析表单"
+    await loadDatasets();
+
+    // 1) 飞书数据源：到期则先同步（同步失败不影响后面打开已有报告）
+    let src = null;
+    try {
+      const fs = await (await api('/api/feishu/sources')).json();
+      state.feishuSources = fs.sources || [];
+      state.feishuCred = fs;
+      src = state.feishuSources.find(s => s.platform === want)
+         || state.feishuSources.find(s => s.platform !== 'WayfairCs');
+      if (src && src.auto_sync !== false) {
+        const last = src.last_sync_at ? (Date.now() / 1000 - src.last_sync_at) / 60 : 1e9;
+        if (last > (src.interval_min || 30)) {
+          await api(`/api/feishu/sources/${src.id}/sync`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          await loadDatasets();
+        }
       }
-      // 直接打开（openDataset 自己会处理 running/error 状态），
-      // 不要依赖 state.datasets —— 它可能还没加载完，会导致"进来看不到看板"
-      if (src.dataset_id) {
-        try { await openDataset(src.dataset_id); return; } catch (e) { /* 落到下面 */ }
-      }
+    } catch (e) { /* 取源/同步失败：继续用已有报告，不要因此停在表单页 */ }
+
+    // 2) 该平台最新一份已完成报告
+    let d = newest(state.datasets.filter(x => x.status === 'done' && x.platform === want))[0];
+    // 3) 飞书源指向的数据集（仅当它属于本平台时）
+    if (!d && src && src.dataset_id && src.platform === want) {
+      d = state.datasets.find(x => x.id === src.dataset_id)
+          || (src.last_status === 'ok' ? { id: src.dataset_id } : null);
     }
-    // 2) 退回到售后平台里最新的一份已完成报告
-    //    注意：必须限定在售后平台（kind='aftersale'），否则会把产品VOC 的报告
-    //    也当成候选，打开后 openDataset 又把顶栏切回「产品VOC」，看起来像"乱跳"。
-    const asPids = state.platforms.filter(p => p.kind === 'aftersale').map(p => p.id);
-    const cand = state.datasets
-      .filter(d => d.status === 'done' && asPids.includes(d.platform))
-      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
-    if (cand.length) { await openDataset(cand[0].id); return; }
-    // 3) 都没有 → 显示空态引导（飞书源配置）
+    // 注意：这里**不要**跨平台兜底 —— 点「Wayfair售后」却显示 Amazon 的看板会误导人，
+    // 没有该平台数据就老老实实显示空态。
+
+    if (d && d.id) {
+      try { await openDataset(d.id); return; } catch (e) { /* 落到空态 */ }
+    }
+
+    // 5) 真的没有数据 → 空态引导（只留飞书源配置）
     showView('setup');
-    $('#cardFeishu').hidden = false;
-    $('#fsNote').textContent = '还没有售后数据。配置一个飞书表格数据源，之后看板会随表格自动更新，无需再上传文件。';
+    const card = $('#cardFeishu');
+    if (card) card.hidden = false;
+    const note = $('#fsNote');
+    if (note) note.textContent =
+      '还没有售后数据。配置一个飞书表格数据源，之后看板会随表格自动更新，无需再上传文件。';
   } catch (e) {
     showView('setup');
   }
