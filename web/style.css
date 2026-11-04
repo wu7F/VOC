@@ -1039,3 +1039,14 @@ table.tbl tr.clickable { cursor: pointer; }
   border-bottom: 1px solid var(--accent-ring); cursor: pointer;
 }
 .fs-guide-link:hover { border-bottom-color: var(--accent); }
+
+/* ========== 售后看板：店铺维度 ========== */
+.as-shop-row { cursor: pointer; transition: background .12s; }
+.as-shop-row:hover { background: var(--surface-2); }
+.as-shop-row.sel { background: var(--accent-soft); }
+.as-shop-row.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.as-hint {
+  font-style: normal; font-weight: 400; font-size: 11.5px;
+  color: var(--text-3); margin-left: 8px;
+}
+.as-clear { float: right; margin-top: -4px; font-size: 12px; padding: 4px 10px; }

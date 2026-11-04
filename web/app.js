@@ -60,6 +60,7 @@ const state = {
   build: 0,              // 前端构建号（= web 静态文件最新修改时间），用于检测服务重启后的版本漂移
   selMode: false,        // 记录多选模式（侧边栏与记录板块共用）
   selected: new Set(),   // 已勾选的记录 id（共用）
+  asShop: '',            // 售后看板当前筛选的店铺（空 = 全部产品）
   pdfEngine: true,       // 服务端 PDF 引擎是否可用
   auth: { enabled: false, account_count: 0 },
   email: null,            // 当前登录账号（邮箱）；null = 未登录
@@ -1759,6 +1760,7 @@ function renderAftersale() {
   const color = plat.color || '#FF7A00';
   const ledger = a.mode === 'ledger';
   const cats = a.categories || [];
+  const shops = a.shops || [];
   const rateTxt = (a.overall_rate == null) ? '—' : (a.overall_rate * 100).toFixed(1) + '%';
   const cntLabel = ledger ? '售后登记条数' : '总订单数';
   const asLabel = ledger ? '售后记录数' : '售后订单数';
@@ -1777,19 +1779,20 @@ function renderAftersale() {
   const html = `
     ${ledger ? `<div class="as-note">
       <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，没有全量订单数做分母，
-      因此<b>不计算售后率</b>。下面展示的是售后<b>登记量</b>、问题分布与产品集中度。
+      因此<b>不计算售后率</b>。下面展示的是售后<b>登记量</b>、各店铺分布与产品集中度。
       ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
     </div>` : ''}
     <div class="as-kpis">
       <div class="as-kpi"><div class="as-kpi-v">${a.total_orders}</div><div class="as-kpi-l">${cntLabel}</div></div>
       <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">${asLabel}</div></div>
       <div class="as-kpi acc"><div class="as-kpi-v">${rateTxt}</div><div class="as-kpi-l">整体售后率</div></div>
+      ${shops.length ? `<div class="as-kpi"><div class="as-kpi-v">${shops.length}</div><div class="as-kpi-l">涉及店铺</div></div>` : ''}
       <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">产品族</div></div>
       ${mergedSkus ? `<div class="as-kpi"><div class="as-kpi-v">${mergedSkus}</div><div class="as-kpi-l">合并的相似 SKU</div></div>` : ''}
     </div>
     <div class="as-grid">
       <div class="as-card">
-        <h3>${ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率'}</h3>
+        <h3>${shops.length ? '各店铺售后分布' : (ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率')}</h3>
         <div id="asRateChart" class="chart-380"></div>
       </div>
       <div class="as-card">
@@ -1797,43 +1800,102 @@ function renderAftersale() {
         <div id="asReasonChart" class="chart-380"></div>
       </div>
     </div>
+    ${shops.length ? `
     <div class="as-card">
-      <h3>${ledger ? '各产品族售后明细' : '各产品族售后率明细'}</h3>
-      <table class="as-table">
-        <thead><tr><th>产品族</th><th>合并 SKU</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th><th>${ledger ? '占比' : '趋势'}</th></tr></thead>
+      <h3>各店铺售后明细 <em class="as-hint">点一行可筛选下方产品明细</em></h3>
+      <table class="as-table as-shop-table">
+        <thead><tr><th>店铺</th><th>售后条数</th><th>占比</th><th>涉及产品</th><th>主要问题</th><th>TOP 产品</th><th>分布</th></tr></thead>
         <tbody>
-          ${a.products.map(p => {
-            const mem = p.members || [];
-            const memTxt = (p.sku_count || 1) > 1
-              ? `<span class="as-mem" title="${esc(mem.map(m => m.sku).join('\n'))}">${p.sku_count} 个 SKU：${esc(mem.slice(0, 3).map(m => m.sku).join('、'))}${p.sku_count > 3 ? ' …' : ''}</span>`
-              : `<span class="as-mem1">${esc(mem[0] ? mem[0].sku : p.product)}</span>`;
-            if (ledger) {
-              const share = a.total_orders ? (p.aftersale / a.total_orders * 100) : 0;
-              return `<tr>
-                <td>${esc(p.product)}</td>
-                <td>${memTxt}</td>
-                <td>${p.total}</td>
-                <td>${p.aftersale}</td>
-                <td>${esc(p.top_category || '—')}</td>
-                <td><div class="bar"><i style="width:${Math.min(100, share).toFixed(1)}%"></i></div></td>
-              </tr>`;
-            }
-            return `<tr>
-              <td>${esc(p.product)}</td>
-              <td>${memTxt}</td>
-              <td>${p.total}</td>
-              <td>${p.aftersale}</td>
-              <td>${(p.rate * 100).toFixed(1)}%</td>
-              <td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td>
+          ${shops.map(s => {
+            const top = (s.products || []).slice(0, 3)
+              .map(p => `${p.product}(${p.count})`).join('、') || '—';
+            return `<tr data-shop="${esc(s.shop)}" class="as-shop-row">
+              <td><b>${esc(s.shop)}</b></td>
+              <td>${s.aftersale}</td>
+              <td>${(s.share * 100).toFixed(1)}%</td>
+              <td>${s.product_count}</td>
+              <td>${esc(s.top_category || '—')}</td>
+              <td class="as-reasons">${esc(top)}</td>
+              <td><div class="bar"><i style="width:${Math.min(100, s.share * 100).toFixed(1)}%"></i></div></td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
-    </div>`;
+    </div>` : ''}
+    <div class="as-card" id="asProdWrap"></div>`;
   $('#panel-overview').innerHTML = html;
+  renderAsProducts(a, state.asShop || '');
+  // 店铺行 → 筛选产品明细
+  $$('#panel-overview .as-shop-row').forEach(tr => {
+    tr.onclick = () => {
+      const name = tr.dataset.shop || '';
+      state.asShop = (state.asShop === name) ? '' : name;
+      $$('#panel-overview .as-shop-row').forEach(x => x.classList.toggle('sel', x.dataset.shop === state.asShop));
+      renderAsProducts(a, state.asShop);
+    };
+    if (tr.dataset.shop === state.asShop) tr.classList.add('sel');
+  });
   // 复用主题色
   document.documentElement.style.setProperty('--accent', color);
   setTimeout(() => { renderAsCharts(a, color); resizeAllCharts(); }, 60);
+}
+
+/** 产品族明细：选了店铺就只看该店，并把「占本店 / 占该产品」两个口径一起给出 */
+function renderAsProducts(a, shop) {
+  const wrap = $('#asProdWrap');
+  if (!wrap) return;
+  const ledger = a.mode === 'ledger';
+  const s = (a.shops || []).find(x => x.shop === shop);
+  let head, body;
+
+  if (s) {
+    head = `<tr><th>产品族</th><th>本店售后条数</th><th>占本店</th><th>占该产品全平台</th><th>分布</th></tr>`;
+    body = (s.products || []).map(p => `<tr>
+      <td><b>${esc(p.product)}</b></td>
+      <td>${p.count}</td>
+      <td>${(p.pct_in_shop * 100).toFixed(1)}%</td>
+      <td>${(p.pct_of_product * 100).toFixed(1)}%</td>
+      <td><div class="bar"><i style="width:${Math.min(100, p.pct_in_shop * 100).toFixed(1)}%"></i></div></td>
+    </tr>`).join('');
+  } else {
+    head = `<tr><th>产品族</th><th>合并 SKU</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th><th>${ledger ? '占比' : '趋势'}</th></tr>`;
+    body = a.products.map(p => {
+      const mem = p.members || [];
+      const memTxt = (p.sku_count || 1) > 1
+        ? `<span class="as-mem" title="${esc(mem.map(m => m.sku).join('\n'))}">${p.sku_count} 个 SKU：${esc(mem.slice(0, 3).map(m => m.sku).join('、'))}${p.sku_count > 3 ? ' …' : ''}</span>`
+        : `<span class="as-mem1">${esc(mem[0] ? mem[0].sku : p.product)}</span>`;
+      if (ledger) {
+        const share = a.total_orders ? (p.aftersale / a.total_orders * 100) : 0;
+        return `<tr>
+          <td>${esc(p.product)}</td>
+          <td>${memTxt}</td>
+          <td>${p.total}</td>
+          <td>${p.aftersale}</td>
+          <td>${esc(p.top_category || '—')}</td>
+          <td><div class="bar"><i style="width:${Math.min(100, share).toFixed(1)}%"></i></div></td>
+        </tr>`;
+      }
+      return `<tr>
+        <td>${esc(p.product)}</td>
+        <td>${memTxt}</td>
+        <td>${p.total}</td>
+        <td>${p.aftersale}</td>
+        <td>${(p.rate * 100).toFixed(1)}%</td>
+        <td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  wrap.innerHTML = `
+    <h3>${s ? `「${esc(s.shop)}」产品族明细` : (ledger ? '各产品族售后明细' : '各产品族售后率明细')}
+      ${s ? `<button class="btn-ghost as-clear" id="asClearShop">显示全部产品</button>` : ''}</h3>
+    <table class="as-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  const clr = $('#asClearShop');
+  if (clr) clr.onclick = () => {
+    state.asShop = '';
+    $$('#panel-overview .as-shop-row').forEach(x => x.classList.remove('sel'));
+    renderAsProducts(a, '');
+  };
 }
 
 function renderAsCharts(a, color) {
@@ -1844,7 +1906,28 @@ function renderAsCharts(a, color) {
     const chart = echarts.init(barEl);
     state.charts['asRateChart'] = chart;
     const top = a.products.slice(0, 15);
-    if (ledger) {
+    if (a.shops && a.shops.length) {
+      // 有店铺维度时，左图优先画店铺分布
+      const ss = a.shops.slice(0, 15);
+      const total = a.aftersale_orders || 1;
+      chart.setOption({
+        grid: { left: 8, right: 46, top: 16, bottom: 8, containLabel: true },
+        tooltip: {
+          trigger: 'axis',
+          formatter: p => `${p[0].name}<br/>售后登记 ${ss[p[0].dataIndex].aftersale} 条（${(p[0].value * 100).toFixed(1)}%）`
+        },
+        xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
+        yAxis: {
+          type: 'category', data: ss.map(s => s.shop).reverse(),
+          axisLabel: { width: 110, overflow: 'truncate' }
+        },
+        series: [{
+          type: 'bar', data: ss.map(s => s.aftersale / total).reverse(),
+          itemStyle: { color: color },
+          label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' }
+        }]
+      });
+    } else if (ledger) {
       // 台账模式：展示登记量（占比），不展示售后率
       const total = a.total_orders || 1;
       const vals = top.map(p => p.aftersale / total);

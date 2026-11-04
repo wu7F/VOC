@@ -327,6 +327,7 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
     prod: dict[str, dict] = {}
     reasons: dict[str, int] = {}
     cats: dict[str, int] = {}
+    shops: dict[str, dict] = {}
     total = 0
     aftersale = 0
     unknown = 0
@@ -335,6 +336,9 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
         raw_product, is_as = _classify_row(row, cols)
         # 高度相似的 SKU 合并成产品族（如 MR221118BR-WKS / MR221118-BR-MJT-BJ-1）
         product = grouper.family(raw_product)
+        # 店铺：不同 sheet 的列名不同（「类型」/「店铺」），按顺序取第一个非空
+        shop = _first_nonempty(row, shop_cols) or "未标注店铺"
+        shop = shop[:30]
         if mode == "detail":
             # 明细模式：flag 为空/无法判定 = **未知**，既不计入分子也不计入分母
             if is_as is None:
@@ -348,6 +352,7 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
                 continue
             is_as = True
         total += 1
+        cat = ""
         if is_as:
             aftersale += 1
             reason = _first_nonempty(row, reason_cols)
@@ -363,6 +368,15 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
         if is_as:
             bucket["aftersale"] += 1
             bucket["cats"][cat] = bucket["cats"].get(cat, 0) + 1
+
+        # 店铺 → 产品族 二维聚合
+        sb = shops.setdefault(shop, {"records": 0, "aftersale": 0,
+                                     "products": {}, "cats": {}})
+        sb["records"] += 1
+        if is_as:
+            sb["aftersale"] += 1
+            sb["cats"][cat] = sb["cats"].get(cat, 0) + 1
+            sb["products"][product] = sb["products"].get(product, 0) + 1
 
     # 台账模式下产品级「售后率」恒为 1.0（每条记录都是售后），会误导 → 置 None
     products = sorted(
@@ -387,6 +401,36 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
                            key=lambda x: -x["count"])
     for c_ in category_list:
         c_["pct"] = round(c_["count"] / csum, 4)
+
+    # ---- 店铺维度：店铺 → 产品族明细 -----------------------------------
+    # 「率」在台账模式下没有分母，所以给三个可比的口径：
+    #   share     该店占全部售后的比例
+    #   pct_in_shop  该产品占本店售后的比例（店铺内结构）
+    #   pct_of_product 该店占该产品全部售后的比例（同一产品跨店铺对比）
+    prod_total = {k: v["aftersale"] for k, v in prod.items()}
+    shop_list = []
+    for name, v in shops.items():
+        prods = sorted(v["products"].items(), key=lambda x: -x[1])
+        shop_list.append({
+            "shop": name,
+            "records": v["records"],
+            "aftersale": v["aftersale"],
+            "product_count": len(prods),
+            "share": round(v["aftersale"] / aftersale, 4) if aftersale else 0,
+            "rate": (round(v["aftersale"] / v["records"], 4)
+                     if v["records"] and mode == "detail" else None),
+            "top_category": (sorted(v["cats"].items(), key=lambda x: -x[1]) or [("", 0)])[0][0],
+            "categories": [{"category": k, "count": c}
+                           for k, c in sorted(v["cats"].items(), key=lambda x: -x[1])],
+            "products": [{
+                "product": pname,
+                "count": cnt,
+                "pct_in_shop": round(cnt / v["aftersale"], 4) if v["aftersale"] else 0,
+                "pct_of_product": round(cnt / prod_total.get(pname, cnt), 4)
+                                  if prod_total.get(pname) else 0,
+            } for pname, cnt in prods],
+        })
+    shop_list.sort(key=lambda x: -x["aftersale"])
 
     # 缺分母 → 售后率为 None（台账模式）
     overall_rate = round(aftersale / total, 4) if (total and mode == "detail") else None
@@ -418,6 +462,7 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             "aftersale_orders": aftersale,
             "overall_rate": overall_rate,
             "products": products,
+            "shops": shop_list,
             "reasons": reason_list,
             "categories": category_list,
             "filtered_out": filtered_out,

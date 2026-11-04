@@ -64,7 +64,7 @@ def _find_header_row(rows: list[list]) -> int:
     达标线：列数够完整 + short_ratio >= 0.5 + 该行没有任何长文本。
     """
     def _vals(r):
-        return [str(c).strip() for c in r if c is not None and str(c).strip()]
+        return [cell_text(c) for c in r if cell_text(c)]
 
     sample = rows[:15]
     counts = [len(_vals(r)) for r in sample]
@@ -90,12 +90,40 @@ def _find_header_row(rows: list[list]) -> int:
     return best_i
 
 
+def cell_text(v) -> str:
+    """把任意单元格值归一化成纯文本。
+
+    飞书 Sheets v2 values 接口对**富文本**单元格返回的是对象而不是字符串：
+        {'segmentStyle': {'bold': False, ...}, 'text': '日期'}
+    多维表格则可能是 {'text': ...} / {'name': ...} / {'link': ...}，
+    多选/多段是 list。直接 str(v) 会得到一长串 JSON —— 既污染列名，
+    又让表头行被判成"长文本"而整行被否掉（真实踩过的坑）。
+    """
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, bool):
+        return "TRUE" if v else "FALSE"
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, dict):
+        for k in ("text", "name", "link", "value", "en_name"):
+            if v.get(k) is not None:
+                return cell_text(v[k])
+        return ""
+    if isinstance(v, (list, tuple)):
+        parts = [cell_text(x) for x in v]
+        return " ".join(p for p in parts if p).strip()
+    return str(v).strip()
+
+
 def _make_cols(hdr: list) -> list[str]:
     """生成去重后的列名。"""
     seen: dict[str, int] = {}
     cols: list[str] = []
     for i, h in enumerate(hdr):
-        name = str(h).strip() if h is not None else ""
+        name = cell_text(h)
         name = name or f"col{i}"
         if name in seen:
             seen[name] += 1
@@ -107,11 +135,11 @@ def _make_cols(hdr: list) -> list[str]:
 
 
 def _row_to_dict(row: list, cols: list[str]) -> dict | None:
-    if not any(c is not None and str(c).strip() for c in row):
+    if not any(cell_text(c) for c in row):
         return None
     d = {}
     for k, v in zip(cols, row):
-        d[k] = "" if v is None else str(v).strip()
+        d[k] = cell_text(v)
     return d
 
 
