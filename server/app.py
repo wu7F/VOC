@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from . import auth, llm, pipeline, aftersale as aftersale_module, feishu as feishu_module
+from . import shop_filter
 from . import feishu_sources as fsources
 from .paths import config_path, ensure_dirs, web_dir
 from .store import Store, _LOCK as _STORE_LOCK
@@ -730,6 +731,51 @@ def _aftersale_columns(headers: list[str], rows: list[dict] | None = None) -> di
             "flag_candidates": d.get("flag_candidates") or [],
         }
     return {"product": "", "flag": "", "reason": "", "shop": "", "mode": ""}
+
+
+class ShopWhitelistReq(BaseModel):
+    enabled: bool = True
+    shops: list[str] = []
+
+
+@app.get("/api/aftersale/shop-whitelist")
+def api_shop_whitelist_get():
+    """读取店铺白名单 + 当前数据里出现过的全部店铺（供界面勾选）。"""
+    wl, raw = shop_filter.load(BASE)
+    seen: list[str] = []
+    with _STORE_LOCK:
+        recs = [d for d in store._data["datasets"]
+                if d.get("platform") in AFTERSALE_PLATFORMS and d.get("status") == "done"]
+    recs.sort(key=lambda d: d.get("created_at") or "", reverse=True)
+    for rec in recs:
+        rp = store.dataset_dir(rec["id"]) / "result.json"
+        if not rp.exists():
+            continue
+        try:
+            a = (json.loads(rp.read_text(encoding="utf-8")) or {}).get("aftersale") or {}
+        except Exception:
+            continue
+        for s in a.get("shops") or []:
+            n = s.get("shop")
+            if n and n not in seen:
+                seen.append(n)
+        for e in (a.get("shop_whitelist") or {}).get("excluded_shops") or []:
+            n = e.get("shop")
+            if n and n not in seen:
+                seen.append(n)
+        break      # 只用最新一份，避免历史数据把已消失的店带进来
+    return {
+        "enabled": wl is not None,
+        "shops": raw,
+        "all_shops": sorted(seen, key=lambda x: x.lower()),
+    }
+
+
+@app.put("/api/aftersale/shop-whitelist")
+def api_shop_whitelist_put(req: ShopWhitelistReq):
+    """保存店铺白名单。保存后需要重新同步/重跑分析才生效。"""
+    saved = shop_filter.save(BASE, req.shops, req.enabled)
+    return {"ok": True, **saved}
 
 
 @app.get("/api/feishu/config")

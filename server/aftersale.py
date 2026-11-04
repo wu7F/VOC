@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 from . import adapters
+from . import shop_filter
 from .sku_merge import SkuGrouper
 
 # 列名别名（小写匹配）：角色 -> 候选关键词
@@ -332,6 +333,10 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
     aftersale = 0
     unknown = 0
     filtered_out = 0
+    # 店铺白名单（未配置则不过滤）—— 只保留业务上关心的店铺
+    wl, wl_raw = shop_filter.load(data_dir)
+    excluded_by_shop: dict[str, int] = {}
+    excluded_count = 0
     for row in all_rows:
         raw_product, is_as = _classify_row(row, cols)
         # 高度相似的 SKU 合并成产品族（如 MR221118BR-WKS / MR221118-BR-MJT-BJ-1）
@@ -339,6 +344,10 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
         # 店铺：不同 sheet 的列名不同（「类型」/「店铺」），按顺序取第一个非空
         shop = _first_nonempty(row, shop_cols) or "未标注店铺"
         shop = shop[:30]
+        if wl is not None and shop_filter.norm(shop) not in wl:
+            excluded_count += 1
+            excluded_by_shop[shop] = excluded_by_shop.get(shop, 0) + 1
+            continue
         if mode == "detail":
             # 明细模式：flag 为空/无法判定 = **未知**，既不计入分子也不计入分母
             if is_as is None:
@@ -432,6 +441,25 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
         })
     shop_list.sort(key=lambda x: -x["aftersale"])
 
+    # 店铺白名单的执行情况（供前端提示"已按名单过滤"）
+    wl_info = {
+        "enabled": wl is not None,
+        "shops": wl_raw,
+        "excluded_records": excluded_count,
+        "excluded_shops": [{"shop": k, "records": v}
+                           for k, v in sorted(excluded_by_shop.items(), key=lambda x: -x[1])],
+        # 名单里在数据中一个都没匹配到的店铺（多半是名字写错/该店没数据）
+        "missing": [s for s in wl_raw if shop_filter.norm(s) not in
+                    {shop_filter.norm(x["shop"]) for x in shop_list}],
+    }
+    if wl is not None:
+        p(82, "已按店铺白名单过滤：排除 %d 个店铺 %d 条记录"
+              % (len(excluded_by_shop), excluded_count))
+        if wl_info["missing"]:
+            warnings.append(
+                "店铺白名单里有 %d 个店铺在数据中没找到（可能名字不一致或该店无记录）：%s"
+                % (len(wl_info["missing"]), "、".join(wl_info["missing"][:6])))
+
     # 缺分母 → 售后率为 None（台账模式）
     overall_rate = round(aftersale / total, 4) if (total and mode == "detail") else None
     p(85, "生成售后洞察报告…")
@@ -467,6 +495,7 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             "categories": category_list,
             "filtered_out": filtered_out,
             "unknown": unknown,
+            "shop_whitelist": wl_info,
         },
         "sources": sources,
         "warnings": warnings,

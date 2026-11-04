@@ -1789,7 +1789,8 @@ function renderAftersale() {
     ${shops.length ? `
     <div class="as-card">
       <h3>各店铺售后 <em class="as-hint">点一张卡片看该店的产品明细</em>
-        ${state.asShop ? `<button class="btn-ghost as-clear" id="asClearShopTop">显示全部</button>` : ''}</h3>
+        <button class="btn-ghost as-clear" id="asShopPick">店铺名单</button>
+        ${state.asShop ? `<button class="btn-ghost as-clear" id="asClearShopTop" style="margin-right:8px">显示全部</button>` : ''}</h3>
       <div class="as-shop-grid">
         ${shops.map(s => {
           const top3 = (s.products || []).slice(0, 3)
@@ -1844,9 +1845,75 @@ function renderAftersale() {
     renderAsProducts(a, '');
     topClr.hidden = true;
   };
+  const pick = $('#asShopPick');
+  if (pick) pick.onclick = openShopPicker;
   // 复用主题色
   document.documentElement.style.setProperty('--accent', color);
   setTimeout(() => { renderAsCharts(a, color); resizeAllCharts(); }, 60);
+}
+
+/** 店铺名单弹窗：勾选要保留的店铺，保存后自动重跑 */
+async function openShopPicker() {
+  const m = $('#shopPickMask');
+  if (!m) return;
+  m.hidden = false;
+  const body = $('#shopPickBody');
+  body.innerHTML = '<p class="sp-loading">加载店铺列表…</p>';
+  let d;
+  try {
+    d = await (await api('/api/aftersale/shop-whitelist')).json();
+  } catch (e) {
+    body.innerHTML = `<p class="err">加载失败：${esc(e.message)}</p>`;
+    return;
+  }
+  const all = d.all_shops || [];
+  const cur = new Set((d.shops || []).map(s => String(s).trim().toLowerCase()));
+  const useList = !!d.enabled && cur.size > 0;
+  body.innerHTML = `
+    <label class="sp-all">
+      <input type="checkbox" id="spEnabled" ${useList ? 'checked' : ''}>
+      <span>只统计勾选的店铺（不勾选 = 全部店铺都算）</span>
+    </label>
+    <div class="sp-list">
+      ${all.map(n => `<label class="sp-item">
+        <input type="checkbox" value="${esc(n)}" ${cur.has(n.trim().toLowerCase()) ? 'checked' : ''}>
+        <span>${esc(n)}</span>
+      </label>`).join('') || '<p class="sp-loading">当前数据里还没有店铺</p>'}
+    </div>
+    <p class="sp-foot">共 ${all.length} 个店铺 · 保存后会立即重新统计一次</p>`;
+}
+
+async function saveShopPicker() {
+  const enabled = $('#spEnabled') && $('#spEnabled').checked;
+  const shops = $$('#shopPickBody .sp-item input:checked').map(x => x.value);
+  const btn = $('#shopPickSave');
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = '保存中…';
+  try {
+    await api('/api/aftersale/shop-whitelist', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, shops })
+    });
+    $('#shopPickMask').hidden = true;
+    // 重新同步一次让名单立刻生效
+    const src = (state.feishuSources || []).find(s => s.dataset_id === (state.current || {}).id);
+    if (src) {
+      const out = await api(`/api/feishu/sources/${src.id}/sync`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (out && out.ok && out.dataset_id) { await openDataset(out.dataset_id); return; }
+    }
+    // 没有飞书源（手动上传的数据集）→ 触发重跑
+    if (state.current) {
+      const r = await api(`/api/datasets/${state.current.id}/rerun`, { method: 'POST' });
+      if (r) { watchJob(state.current.id); return; }
+    }
+  } catch (e) {
+    btn.textContent = '保存失败';
+    setTimeout(() => { btn.disabled = false; btn.textContent = old; }, 2500);
+  }
+  btn.disabled = false;
+  btn.textContent = old;
 }
 
 /** 把「每分钟数」说成人话 */
@@ -1879,6 +1946,10 @@ async function renderAsFresh() {
   const iv = src.interval_min || 30;
   const nextAt = src.last_sync_at ? src.last_sync_at + iv * 60 : null;
   el.hidden = false;
+  const wl = (state.result && state.result.aftersale && state.result.aftersale.shop_whitelist) || {};
+  const wlTxt = wl.enabled
+    ? `<span class="fr-sep">·</span><span class="fr-wl">只统计 ${(wl.shops || []).length} 个店铺，已排除 ${wl.excluded_records || 0} 条</span>`
+    : `<span class="fr-sep">·</span><span>统计全部店铺</span>`;
   el.innerHTML = `
     <span class="fr-dot"></span>
     <b>${esc(src.name || '飞书数据源')}</b>
@@ -1887,6 +1958,7 @@ async function renderAsFresh() {
     <span>每 ${esc(fmtInterval(iv))}自动更新</span>
     <span class="fr-sep">·</span>
     <span>下次约 ${esc(fmt(nextAt))}</span>
+    ${wlTxt}
     <button class="btn-ghost fr-btn" id="asSyncNow">立即更新</button>`;
   const btn = $('#asSyncNow');
   if (btn) btn.onclick = async () => {
@@ -2029,6 +2101,15 @@ function bindAftersaleUI() {
   $('#btnAsSummary').onclick = openAftersaleSummary;
   $('#asModalClose').onclick = () => { $('#asModal').hidden = true; };
   $('#asModal').addEventListener('click', e => { if (e.target.id === 'asModal') $('#asModal').hidden = true; });
+  // 店铺名单弹窗
+  const pm = $('#shopPickMask');
+  if (pm) {
+    $('#shopPickClose').onclick = () => { pm.hidden = true; };
+    pm.addEventListener('click', e => { if (e.target === pm) pm.hidden = true; });
+    $('#shopPickSave').onclick = saveShopPicker;
+    $('#shopPickAll').onclick = () => $$('#shopPickBody .sp-item input').forEach(x => { x.checked = true; });
+    $('#shopPickNone').onclick = () => $$('#shopPickBody .sp-item input').forEach(x => { x.checked = false; });
+  }
 }
 
 function updateGroupUI() {

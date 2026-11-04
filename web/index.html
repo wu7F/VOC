@@ -385,6 +385,22 @@
 <script src="/app.js"></script>
 
 <!-- ============ 售后总览弹窗 ============ -->
+<div class="modal-mask" id="shopPickMask" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <span>店铺名单 · 只统计勾选的店铺</span>
+      <button class="icon-btn" id="shopPickClose">✕</button>
+    </div>
+    <div class="modal-body" id="shopPickBody"></div>
+    <div class="modal-foot">
+      <button class="btn-ghost" id="shopPickAll">全选</button>
+      <button class="btn-ghost" id="shopPickNone">全不选</button>
+      <span class="rt-spacer"></span>
+      <button class="btn-primary" id="shopPickSave">保存并重新统计</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-mask" id="asModal" hidden>
   <div class="modal as-modal">
     <div class="modal-head">
