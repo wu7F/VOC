@@ -1783,8 +1783,10 @@ function renderAftersale() {
   const plat = state.platforms.find(x => x.id === r.platform) || {};
   const color = plat.color || '#FF7A00';
   const ledger = a.mode === 'ledger';
+  const hasRate = a.rate_basis === 'eccang_qty' && a.overall_rate != null;
   const cats = a.categories || [];
   const shops = a.shops || [];
+  const sales = a.sales || {};
   const rateTxt = (a.overall_rate == null) ? '—' : (a.overall_rate * 100).toFixed(1) + '%';
   const cntLabel = ledger ? '售后登记条数' : '总订单数';
   const asLabel = ledger ? '售后记录数' : '售后订单数';
@@ -1793,7 +1795,8 @@ function renderAftersale() {
     `${c.created_at}`,
     `${a.total_orders} ${ledger ? '条' : '单'}`,
     `${a.aftersale_orders} ${ledger ? '条售后' : '笔售后'}`,
-    ledger ? '台账模式 · 不计算售后率' : `整体售后率 ${rateTxt}`,
+    hasRate ? `整体售后率 ${rateTxt} · 销量 ${sales.qty_used || 0} 件`
+            : (ledger ? '台账模式 · 未取到销量分母' : `整体售后率 ${rateTxt}`),
     `${state.result.elapsed_sec != null ? state.result.elapsed_sec : (c.elapsed || '-')}s`,
   ].map(esc).join('<span class="sep">·</span>');
   showWarnings(c.warnings);
@@ -1807,6 +1810,7 @@ function renderAftersale() {
       <div class="as-kpi"><div class="as-kpi-v">${a.aftersale_orders}</div><div class="as-kpi-l">${asLabel}</div></div>
       <div class="as-kpi acc"><div class="as-kpi-v">${rateTxt}</div><div class="as-kpi-l">整体售后率</div></div>
       ${shops.length ? `<div class="as-kpi"><div class="as-kpi-v">${shops.length}</div><div class="as-kpi-l">涉及店铺</div></div>` : ''}
+      ${hasRate ? `<div class="as-kpi"><div class="as-kpi-v">${sales.qty_used || 0}</div><div class="as-kpi-l">同期销量件数（分母）</div></div>` : ''}
       <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">产品族</div></div>
       ${mergedSkus ? `<div class="as-kpi"><div class="as-kpi-v">${mergedSkus}</div><div class="as-kpi-l">合并的相似 SKU</div></div>` : ''}
     </div>
@@ -1819,22 +1823,31 @@ function renderAftersale() {
         ${shops.map(s => {
           const top3 = (s.products || []).slice(0, 3)
             .map(p => `${p.product}(${p.count})`).join(' · ') || '—';
+          const rTxt = (hasRate && s.rate != null) ? (s.rate * 100).toFixed(1) + '%' : '—';
+          const mainNum = hasRate ? rTxt : s.aftersale;
+          const mainUnit = hasRate ? '' : '<em>条</em>';
+          const subTxt = hasRate
+            ? `${s.aftersale} 条售后 / 销量 ${s.sales_qty || 0} 件 · ${s.product_count} 个产品`
+            : `${s.product_count} 个产品 · ${esc(s.top_category || '—')}`;
+          const barW = hasRate
+            ? Math.min(100, (s.rate || 0) * 100).toFixed(1)
+            : Math.min(100, s.share * 100).toFixed(1);
           return `<button class="as-shop-card${state.asShop === s.shop ? ' sel' : ''}" data-shop="${esc(s.shop)}">
             <div class="sc-head">
               <span class="sc-name">${esc(s.shop)}</span>
               <span class="sc-share">${(s.share * 100).toFixed(1)}%</span>
             </div>
-            <div class="sc-num">${s.aftersale}<em>条</em></div>
-            <div class="sc-sub">${s.product_count} 个产品 · ${esc(s.top_category || '—')}</div>
+            <div class="sc-num">${mainNum}${mainUnit}</div>
+            <div class="sc-sub">${subTxt}</div>
             <div class="sc-top3">${esc(top3)}</div>
-            <div class="sc-bar"><i style="width:${Math.min(100, s.share * 100).toFixed(1)}%"></i></div>
+            <div class="sc-bar"><i style="width:${barW}%"></i></div>
           </button>`;
         }).join('')}
       </div>
     </div>` : ''}
     <div class="as-grid">
       <div class="as-card">
-        <h3>${shops.length ? '各店铺售后占比' : (ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率')}</h3>
+        <h3>${shops.length ? (hasRate ? '各店铺售后率（当月）' : '各店铺售后占比') : (ledger ? '各产品族售后登记量 TOP15' : '各产品族售后率')}</h3>
         <div id="asRateChart" class="chart-380"></div>
       </div>
       <div class="as-card">
@@ -1843,11 +1856,17 @@ function renderAftersale() {
       </div>
     </div>
     <div class="as-card" id="asProdWrap"></div>
-    ${ledger ? `<div class="as-note">
-      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，没有全量订单数做分母，
-      因此<b>不计算售后率</b>，展示的是售后<b>登记量</b>与各店铺/产品的分布。
+    ${hasRate ? `<div class="as-note">
+      <b>售后率口径</b>：当月售后事件数 ÷ 易仓同店同月<b>销量件数</b>（自然月）。
+      分母覆盖 ${esc((sales.months || []).join('、') || '—')}，
+      订单号精确匹配 <b>${sales.matched_orders || 0}</b> 条、未匹配 <b>${sales.unmatched_orders || 0}</b> 条；
+      缺日期 ${sales.no_month || 0} 条、该月无销量 ${sales.no_denom || 0} 条不计入率。
       ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
-    </div>` : ''}`;
+    </div>` : (ledger ? `<div class="as-note">
+      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，尚未同步易仓销量数据，
+      因此<b>暂不计算售后率</b>，展示的是售后<b>登记量</b>与各店铺/产品的分布。
+      ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
+    </div>` : '')}`;
   $('#panel-overview').innerHTML = html;
   renderAsProducts(a, state.asShop || '');
   renderAsFresh();           // 更新状态条（上次同步 / 下次自动更新 / 立即更新）
@@ -1923,8 +1942,8 @@ async function saveShopPicker() {
     // 重新同步一次让名单立刻生效
     const src = (state.feishuSources || []).find(s => s.dataset_id === (state.current || {}).id);
     if (src) {
-      const out = await api(`/api/feishu/sources/${src.id}/sync`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const out = await (await api(`/api/feishu/sources/${src.id}/sync`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
       if (out && out.ok && out.dataset_id) { await openDataset(out.dataset_id); return; }
     }
     // 没有飞书源（手动上传的数据集）→ 触发重跑
@@ -1950,17 +1969,42 @@ function fmtInterval(min) {
   return m + ' 分钟';
 }
 
+/** 易仓销量首次全量同步可能要几十分钟：后台轮询进度，完成后自动重跑分析刷新看板 */
+let salesPollTimer = null;
+function startSalesPoll(src) {
+  if (salesPollTimer || !src) return;
+  const started = Date.now();
+  salesPollTimer = setInterval(async () => {
+    if (Date.now() - started > 60 * 60 * 1000) {   // 最多盯 60 分钟
+      clearInterval(salesPollTimer); salesPollTimer = null; return;
+    }
+    try {
+      const st = await (await api('/api/eccang/sales')).json();
+      const sb = $('#asSyncSales');
+      if (st.sync && st.sync.running) {
+        if (sb) sb.textContent = `同步中 ${st.sync.progress || 0}%`;
+        return;
+      }
+      clearInterval(salesPollTimer); salesPollTimer = null;
+      const out = await (await api(`/api/feishu/sources/${src.id}/sync`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
+      if (out && out.ok && out.dataset_id) await openDataset(out.dataset_id);
+    } catch (e) { /* 单次查询失败忽略，下一轮继续 */ }
+  }, 8000);
+}
+
 /** 数据新鲜度条：这个数据集若来自飞书源，说明上次/下次自动更新，并给「立即更新」 */
 async function renderAsFresh() {
   const el = $('#asFresh');
   if (!el) return;
-  let src = null;
+  let src = null, sales = null;
   try {
     const d = await (await api('/api/feishu/sources')).json();
     state.feishuSources = d.sources || [];
     const cid = (state.current || {}).id;
     src = state.feishuSources.find(s => s.dataset_id === cid);
-  } catch (e) { el.hidden = true; return; }
+  } catch (e) { /* 取源失败：继续显示销量状态 */ }
+  try { sales = await (await api('/api/eccang/sales')).json(); } catch (e) { sales = null; }
   if (!src) { el.hidden = true; return; }
 
   const fmt = t => t
@@ -1974,6 +2018,16 @@ async function renderAsFresh() {
   const wlTxt = wl.enabled
     ? `<span class="fr-sep">·</span><span class="fr-wl">只统计 ${(wl.shops || []).length} 个店铺，已排除 ${wl.excluded_records || 0} 条</span>`
     : `<span class="fr-sep">·</span><span>统计全部店铺</span>`;
+  let salesTxt = '';
+  if (sales) {
+    if (!sales.configured) {
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl">易仓销量未配置（暂按登记量展示）</span>`;
+    } else if (sales.sync && sales.sync.running) {
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl">销量同步中 ${sales.sync.progress || 0}%</span>`;
+    } else {
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl">销量分母 ${esc(fmt(sales.synced_at))} · ${sales.units || 0} 件 / ${(sales.months || []).length} 个月</span>`;
+    }
+  }
   el.innerHTML = `
     <span class="fr-dot"></span>
     <b>${esc(src.name || '飞书数据源')}</b>
@@ -1983,15 +2037,64 @@ async function renderAsFresh() {
     <span class="fr-sep">·</span>
     <span>下次约 ${esc(fmt(nextAt))}</span>
     ${wlTxt}
+    ${salesTxt}
+    ${sales && !sales.configured ? `<button class="btn-ghost fr-btn" id="asEcConfig">配置销量数据源</button>` : ''}
+    ${sales && sales.configured ? `<button class="btn-ghost fr-btn" id="asSyncSales">更新销量</button>` : ''}
     <button class="btn-ghost fr-btn" id="asSyncNow">立即更新</button>`;
+  const cfgBtn = $('#asEcConfig');
+  if (cfgBtn) cfgBtn.onclick = async () => {
+    const key = prompt('易仓开放平台 app_key（开放平台 → 我的应用）：');
+    if (!key) return;
+    const sec = prompt('Secret Key（app_secret）：');
+    if (!sec) return;
+    const sid = prompt('授权服务ID（service_id，例如 EWIHCO）：');
+    if (!sid) return;
+    cfgBtn.disabled = true;
+    const old = cfgBtn.textContent;
+    cfgBtn.textContent = '保存中…';
+    try {
+      await api('/api/eccang/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_key: key, app_secret: sec, service_id: sid })
+      });
+      await api('/api/eccang/sales/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full: true })
+      });
+      startSalesPoll(src);
+      cfgBtn.textContent = '已配置 · 后台同步中';
+      setTimeout(() => { cfgBtn.disabled = false; cfgBtn.textContent = old; }, 5000);
+    } catch (e) {
+      cfgBtn.textContent = '配置失败';
+      setTimeout(() => { cfgBtn.disabled = false; cfgBtn.textContent = old; }, 2500);
+    }
+  };
+  const sb = $('#asSyncSales');
+  if (sb) sb.onclick = async () => {
+    sb.disabled = true;
+    const old = sb.textContent;
+    sb.textContent = '同步中…';
+    try {
+      await api('/api/eccang/sales/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full: !(sales && sales.synced_at) })
+      });
+      startSalesPoll(src);     // 首次全量较久，后台轮询，完成后自动刷新看板
+      setTimeout(() => { sb.disabled = false; sb.textContent = old; }, 2000);
+    } catch (e) {
+      sb.textContent = '同步失败';
+      setTimeout(() => { sb.disabled = false; sb.textContent = old; }, 2500);
+    }
+  };
+  if (sales && sales.sync && sales.sync.running) startSalesPoll(src);
   const btn = $('#asSyncNow');
   if (btn) btn.onclick = async () => {
     btn.disabled = true;
     const old = btn.textContent;
     btn.textContent = '更新中…';
     try {
-      const out = await api(`/api/feishu/sources/${src.id}/sync`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const out = await (await api(`/api/feishu/sources/${src.id}/sync`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
       if (out && out.ok && out.dataset_id) { await openDataset(out.dataset_id); return; }
       btn.textContent = '更新失败';
     } catch (e) { btn.textContent = '更新失败'; }
@@ -2004,25 +2107,54 @@ function renderAsProducts(a, shop) {
   const wrap = $('#asProdWrap');
   if (!wrap) return;
   const ledger = a.mode === 'ledger';
+  const hasRate = a.rate_basis === 'eccang_qty' && a.overall_rate != null;
   const s = (a.shops || []).find(x => x.shop === shop);
+  const rateCell = v => (v == null) ? '—' : (v * 100).toFixed(1) + '%';
+  const rateBar = v => (v == null) ? '' :
+    `<div class="bar"><i style="width:${Math.min(100, v * 100).toFixed(1)}%"></i></div>`;
   let head, body;
 
   if (s) {
-    head = `<tr><th>产品族</th><th>本店售后条数</th><th>占本店</th><th>占该产品全平台</th><th>分布</th></tr>`;
-    body = (s.products || []).map(p => `<tr>
-      <td><b>${esc(p.product)}</b></td>
-      <td>${p.count}</td>
-      <td>${(p.pct_in_shop * 100).toFixed(1)}%</td>
-      <td>${(p.pct_of_product * 100).toFixed(1)}%</td>
-      <td><div class="bar"><i style="width:${Math.min(100, p.pct_in_shop * 100).toFixed(1)}%"></i></div></td>
-    </tr>`).join('');
+    if (hasRate) {
+      head = `<tr><th>产品族</th><th>售后条数</th><th>当月销量</th><th>售后率</th><th>占本店</th><th>占该产品全平台</th></tr>`;
+      body = (s.products || []).map(p => `<tr>
+        <td><b>${esc(p.product)}</b></td>
+        <td>${p.count}</td>
+        <td>${p.sales_qty || 0}</td>
+        <td><b>${rateCell(p.rate)}</b></td>
+        <td>${(p.pct_in_shop * 100).toFixed(1)}%</td>
+        <td>${(p.pct_of_product * 100).toFixed(1)}%</td>
+      </tr>`).join('');
+    } else {
+      head = `<tr><th>产品族</th><th>本店售后条数</th><th>占本店</th><th>占该产品全平台</th><th>分布</th></tr>`;
+      body = (s.products || []).map(p => `<tr>
+        <td><b>${esc(p.product)}</b></td>
+        <td>${p.count}</td>
+        <td>${(p.pct_in_shop * 100).toFixed(1)}%</td>
+        <td>${(p.pct_of_product * 100).toFixed(1)}%</td>
+        <td><div class="bar"><i style="width:${Math.min(100, p.pct_in_shop * 100).toFixed(1)}%"></i></div></td>
+      </tr>`).join('');
+    }
   } else {
-    head = `<tr><th>产品族</th><th>合并 SKU</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th><th>${ledger ? '占比' : '趋势'}</th></tr>`;
+    head = `<tr><th>产品族</th><th>合并 SKU</th><th>${ledger ? '登记条数' : '总单数'}</th>` +
+      (hasRate ? `<th>当月销量</th><th>售后率</th>` :
+        `<th>${ledger ? '售后条数' : '售后单数'}</th><th>${ledger ? '问题大类' : '售后率'}</th>`) +
+      `<th>${hasRate ? '问题大类' : (ledger ? '占比' : '趋势')}</th></tr>`;
     body = a.products.map(p => {
       const mem = p.members || [];
       const memTxt = (p.sku_count || 1) > 1
         ? `<span class="as-mem" title="${esc(mem.map(m => m.sku).join('\n'))}">${p.sku_count} 个 SKU：${esc(mem.slice(0, 3).map(m => m.sku).join('、'))}${p.sku_count > 3 ? ' …' : ''}</span>`
         : `<span class="as-mem1">${esc(mem[0] ? mem[0].sku : p.product)}</span>`;
+      if (hasRate) {
+        return `<tr>
+          <td>${esc(p.product)}</td>
+          <td>${memTxt}</td>
+          <td>${p.aftersale}</td>
+          <td>${p.sales_qty || 0}</td>
+          <td><b>${rateCell(p.rate)}</b></td>
+          <td>${esc(p.top_category || '—')}</td>
+        </tr>`;
+      }
       if (ledger) {
         const share = a.total_orders ? (p.aftersale / a.total_orders * 100) : 0;
         return `<tr>
@@ -2039,14 +2171,14 @@ function renderAsProducts(a, shop) {
         <td>${memTxt}</td>
         <td>${p.total}</td>
         <td>${p.aftersale}</td>
-        <td>${(p.rate * 100).toFixed(1)}%</td>
-        <td><div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div></td>
+        <td>${rateCell(p.rate)}</td>
+        <td>${rateBar(p.rate)}</td>
       </tr>`;
     }).join('');
   }
 
   wrap.innerHTML = `
-    <h3>${s ? `「${esc(s.shop)}」产品族明细` : (ledger ? '各产品族售后明细' : '各产品族售后率明细')}</h3>
+    <h3>${s ? `「${esc(s.shop)}」产品族明细` : (hasRate ? '各产品族售后率明细' : (ledger ? '各产品族售后明细' : '各产品族售后率明细'))}</h3>
     <table class="as-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
@@ -2059,22 +2191,32 @@ function renderAsCharts(a, color) {
     state.charts['asRateChart'] = chart;
     const top = a.products.slice(0, 15);
     if (a.shops && a.shops.length) {
-      // 有店铺维度时，左图优先画店铺分布
-      const ss = a.shops.slice(0, 15);
-      const total = a.aftersale_orders || 1;
+      // 有店铺维度时，左图优先画店铺：有销量分母就画售后率，否则画登记占比
+      const hasRate = a.rate_basis === 'eccang_qty' && a.overall_rate != null;
+      const ssRev = a.shops.slice(0, 15).reverse();
+      const vals = ssRev.map(s => hasRate
+        ? (s.rate == null ? 0 : s.rate)
+        : s.aftersale / (a.aftersale_orders || 1));
+      const maxV = Math.max(0.05, ...vals) * 1.15;
       chart.setOption({
         grid: { left: 8, right: 46, top: 16, bottom: 8, containLabel: true },
         tooltip: {
           trigger: 'axis',
-          formatter: p => `${p[0].name}<br/>售后登记 ${ss[p[0].dataIndex].aftersale} 条（${(p[0].value * 100).toFixed(1)}%）`
+          formatter: p => {
+            const s = ssRev[p[0].dataIndex] || {};
+            return hasRate
+              ? `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%<br/>售后 ${s.aftersale || 0} 条 / 销量 ${s.sales_qty || 0} 件`
+              : `${p[0].name}<br/>售后登记 ${s.aftersale || 0} 条（${(p[0].value * 100).toFixed(1)}%）`;
+          }
         },
-        xAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
+        xAxis: { type: 'value', max: maxV,
+                 axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
         yAxis: {
-          type: 'category', data: ss.map(s => s.shop).reverse(),
+          type: 'category', data: ssRev.map(s => s.shop),
           axisLabel: { width: 110, overflow: 'truncate' }
         },
         series: [{
-          type: 'bar', data: ss.map(s => s.aftersale / total).reverse(),
+          type: 'bar', data: vals,
           itemStyle: { color: color },
           label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' }
         }]
@@ -2187,34 +2329,40 @@ function renderAftersaleSummary(d) {
   body.classList.remove('loading');
   const ov = d.overall;
   const ledger = d.mode === 'ledger';
-  const rateTxt = (ov.rate == null) ? '—' : (ov.rate * 100).toFixed(1) + '%';
+  const rateMode = d.mode === 'eccang_qty';
+  const hasRate = ov.rate != null;
+  const rateTxt = hasRate ? (ov.rate * 100).toFixed(1) + '%' : '—';
+  const cntLabel = (ledger || rateMode) ? '售后登记条数' : '总订单数';
+  const asLabel = (ledger || rateMode) ? '售后记录数' : '售后订单数';
   const cats = d.categories && d.categories.length ? d.categories : [];
   const rt = $('#asSumRateTitle');
-  if (rt) rt.textContent = ledger ? '各平台 · 各产品族售后登记量' : '各平台 · 各产品族售后率';
+  if (rt) rt.textContent = hasRate ? '各平台 · 各产品族售后率' : '各平台 · 各产品族售后登记量';
   const mt = $('#asSumTitle');
-  if (mt) mt.textContent = ledger
-    ? '售后 VOC 总览 · 各平台各产品族登记量与问题分布'
-    : '售后 VOC 总览 · 各平台各产品族售后率与原因分布';
+  if (mt) mt.textContent = hasRate
+    ? '售后 VOC 总览 · 各平台各产品族售后率与原因分布'
+    : '售后 VOC 总览 · 各平台各产品族登记量与问题分布';
   const tt = $('#asSumTable');
   if (tt && tt.closest('.as-card')) {
     const h3 = tt.closest('.as-card').querySelector('h3');
-    if (h3) h3.textContent = ledger ? '各平台各产品售后登记明细' : '各平台各产品售后明细';
+    if (h3) h3.textContent = hasRate ? '各平台各产品售后明细' : '各平台各产品售后登记明细';
   }
   $('#asSumKpis').innerHTML = `
-    <div class="as-kpi"><div class="as-kpi-v">${ov.total}</div><div class="as-kpi-l">${ledger ? '售后登记条数' : '总订单数'}</div></div>
-    <div class="as-kpi"><div class="as-kpi-v">${ov.aftersale}</div><div class="as-kpi-l">${ledger ? '售后记录数' : '售后订单数'}</div></div>
+    <div class="as-kpi"><div class="as-kpi-v">${ov.total}</div><div class="as-kpi-l">${cntLabel}</div></div>
+    <div class="as-kpi"><div class="as-kpi-v">${ov.aftersale}</div><div class="as-kpi-l">${asLabel}</div></div>
     <div class="as-kpi acc"><div class="as-kpi-v">${rateTxt}</div><div class="as-kpi-l">整体售后率</div></div>
+    ${rateMode ? `<div class="as-kpi"><div class="as-kpi-v">${ov.sales_qty || 0}</div><div class="as-kpi-l">同期销量件数</div></div>` : ''}
     <div class="as-kpi"><div class="as-kpi-v">${d.datasets}</div><div class="as-kpi-l">已分析数据集</div></div>`;
   const rateCell = p => (p.rate == null) ? '—' : (p.rate * 100).toFixed(1) + '%';
   const rateBar = p => (p.rate == null) ? '' :
     `<div class="bar"><i style="width:${(p.rate * 100).toFixed(1)}%"></i></div>`;
-  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品族</th><th>${ledger ? '登记条数' : '总单数'}</th><th>${ledger ? '售后条数' : '售后单数'}</th><th>售后率</th><th>趋势</th></tr></thead><tbody>` +
+  $('#asSumTable').innerHTML = `<thead><tr><th>平台</th><th>产品族</th><th>${(ledger || rateMode) ? '登记条数' : '总单数'}</th><th>${(ledger || rateMode) ? '售后条数' : '售后单数'}</th><th>售后率</th><th>趋势</th></tr></thead><tbody>` +
     d.products.map(p => `<tr><td>${esc(p.platform)}</td><td>${esc(p.product)}</td><td>${p.total}</td><td>${p.aftersale}</td><td>${rateCell(p)}</td><td>${rateBar(p)}</td></tr>`).join('') + `</tbody>`;
   if (typeof echarts !== 'undefined') {
     const bar = echarts.init(document.getElementById('asSumRateChart'));
     state.charts['asSumRateChart'] = bar;
     const top = d.products.slice(0, 20);
-    if (ledger) {
+    const drawRate = hasRate && top.some(p => p.rate != null);
+    if (!drawRate) {
       const total = ov.total || 1;
       bar.setOption({
         grid: { left: 8, right: 46, top: 16, bottom: 8, containLabel: true },

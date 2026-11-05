@@ -24,9 +24,11 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import adapters
+from . import eccang_sales
 from . import shop_filter
 from .sku_merge import SkuGrouper
 
@@ -159,6 +161,45 @@ def _first_nonempty(row: dict, cols: list[str]) -> str:
     return ""
 
 
+def _parse_month(val: str, ref_year: int | None = None) -> str:
+    """把台账里的日期解析成自然月 YYYY-MM。
+
+    飞书表格里同时存在三种写法（实测）：
+      · Excel 日期序列号   46329
+      · 完整日期           2026/10/20、2026-10-20 00:00
+      · 省略年份           7.18、12.23  （按当前年份推断，跨年记到上一年）
+    """
+    v = str(val or "").strip()
+    if not v:
+        return ""
+    if re.fullmatch(r"\d{5}(\.\d+)?", v):
+        try:
+            d = datetime(1899, 12, 30) + timedelta(days=float(v))
+            return d.strftime("%Y-%m")
+        except Exception:
+            return ""
+    m = re.match(r"^(\d{4})[-/.](\d{1,2})", v)
+    if m:
+        return "%s-%02d" % (m.group(1), int(m.group(2)))
+    m = re.match(r"^(\d{1,2})[./-](\d{1,2})$", v)
+    if m:
+        mo = int(m.group(1))
+        if 1 <= mo <= 12:
+            yr = ref_year or datetime.now().year
+            # 现在是 11 月，出现 12.23 之类的大概率是去年的记录
+            if mo > datetime.now().month:
+                yr -= 1
+            return "%04d-%02d" % (yr, mo)
+    return ""
+
+
+def _order_columns(headers: list[str]) -> list[str]:
+    """订单号列（台账用它和易仓订单精确对齐，不参与语义角色判定）。"""
+    keys = ("订单号", "订单编号", "平台订单号", "orderno", "order_no",
+            "ordercode", "order code", "amazonorderid", "reference", "refrence")
+    return [h for h in headers if any(k in _norm(h) for k in keys)]
+
+
 # 售后原因归一化：台账里的「内容要点」是自由文本（可达数百种），
 # 归成大类才能看清问题结构。顺序即优先级。
 _REASON_CATEGORIES = [
@@ -231,6 +272,10 @@ def assign_roles(headers: list[str], rows: list[dict]) -> dict:
     shop_cols = _pick_columns(headers, "shop", exclude=used)
     used |= set(shop_cols)
     product_cols = _pick_columns(headers, "product", exclude=used)
+    used |= set(product_cols)
+    # 日期 / 订单号：用于「自然月售后事件 ÷ 当月易仓销量件数」
+    date_cols = _pick_columns(headers, "date", exclude=used)
+    order_cols = _order_columns(headers)
 
     # 明细模式要求 flag 列几乎覆盖所有行；否则"没填 flag"不等于"不是售后"
     mode = "detail" if (flag_trusted and flag_cov >= 0.9) else "ledger"
@@ -239,6 +284,8 @@ def assign_roles(headers: list[str], rows: list[dict]) -> dict:
         "flag": [flag_primary] if flag_primary else [],
         "reason": reason_cols,
         "shop": shop_cols,
+        "date": date_cols,
+        "order": order_cols,
         "mode": mode,
         "flag_trusted": flag_trusted,
         "flag_cov": round(flag_cov, 3),
@@ -285,7 +332,7 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
 
     # ---- 列角色分配（与预览共用同一套逻辑）-----------------------------
     roles = assign_roles(headers, all_rows)
-    cols = {k: roles[k] for k in ("product", "flag", "reason", "shop")}
+    cols = {k: roles[k] for k in ("product", "flag", "reason", "shop", "date", "order")}
     mode = roles["mode"]
     flag_primary = cols["flag"][0] if cols["flag"] else ""
     flag_trusted = roles["flag_trusted"]
@@ -294,6 +341,8 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
     reason_cols = cols["reason"]
     shop_cols = cols["shop"]
     product_cols = cols["product"]
+    date_cols = cols.get("date") or []
+    order_cols = cols.get("order") or []
     if not product_cols:
         raise ValueError(
             "未能识别「产品」列。\n"
@@ -311,13 +360,13 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
         if not flag_trusted and flag_cands:
             warnings.append(
                 "未找到可靠的「是否售后」列（候选列：%s），已按**台账模式**处理："
-                "只统计已发生的售后记录，不计算售后率。"
+                "只统计已发生的售后记录，售后率用易仓销量件数作分母。"
                 % "、".join(flag_cands[:4]))
         elif flag_trusted:
             warnings.append(
                 "「是否售后」列（%s）只覆盖了 %.0f%% 的记录，"
                 "说明该表并非每行都登记了售后状态 —— 已按**台账模式**处理："
-                "只统计已发生的售后记录，不计算售后率。"
+                "只统计已发生的售后记录，售后率用易仓销量件数作分母。"
                 % (flag_primary, flag_cov * 100))
 
     if mode == "ledger":
@@ -333,6 +382,17 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
     aftersale = 0
     unknown = 0
     filtered_out = 0
+    # ---- 真售后率：自然月售后事件 ÷ 该店铺当月易仓销量件数 --------------
+    sales = eccang_sales.load(data_dir)
+    acct_map_lc = {str(k).strip().lower(): v
+                   for k, v in eccang_sales.load_account_map(data_dir).items()}
+    rate_basis = "eccang_qty" if (sales.get("qty") or {}) else "none"
+    ev_shop_month: dict[tuple[str, str, str], int] = {}       # (shop, acct, month)
+    ev_shop_fam_month: dict[tuple[str, str, str, str], int] = {}  # (shop, family, acct, month)
+    matched_orders = 0
+    unmatched_orders = 0
+    no_month = 0
+    no_denom = 0
     # 店铺白名单（未配置则不过滤）—— 只保留业务上关心的店铺
     wl, wl_raw = shop_filter.load(data_dir)
     excluded_by_shop: dict[str, int] = {}
@@ -370,6 +430,28 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             reasons[reason] = reasons.get(reason, 0) + 1
             cat = _reason_category(reason)
             cats[cat] = cats.get(cat, 0) + 1
+
+            # 每条售后事件：按「发生月」归集，按「订单号」精确落到易仓账号
+            month = _parse_month(_first_nonempty(row, date_cols))
+            order_no = _first_nonempty(row, order_cols)
+            hit = eccang_sales.lookup_order(sales, order_no)
+            if hit:
+                matched_orders += 1
+            elif order_no:
+                unmatched_orders += 1
+            acct = (hit or {}).get("a") or ""
+            if not acct:
+                accs = acct_map_lc.get(shop.strip().lower()) or []
+                acct = accs[0] if accs else ""
+            if not month:
+                no_month += 1
+            elif not acct or eccang_sales.qty_for(sales, acct, month) <= 0:
+                no_denom += 1
+            else:
+                k = (shop, acct, month)
+                ev_shop_month[k] = ev_shop_month.get(k, 0) + 1
+                kf = (shop, product, acct, month)
+                ev_shop_fam_month[kf] = ev_shop_fam_month.get(kf, 0) + 1
         bucket = prod.setdefault(product, {"total": 0, "aftersale": 0, "cats": {},
                                            "skus": {}, "raw": raw_product})
         bucket["total"] += 1
@@ -441,6 +523,59 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
         })
     shop_list.sort(key=lambda x: -x["aftersale"])
 
+    # ---- 真售后率：分母 = 易仓「该账号 × 该自然月」的销量件数 ------------
+    # 同一个易仓账号可能被两个中文店名共用（如 香港 / 香港店 都是 KornerHK_US），
+    # 所以分母按 (账号, 月) 去重，只计一次。
+    denom_by_am: dict[tuple[str, str], int] = {}
+    for (s_, a_, m_) in ev_shop_month:
+        q = eccang_sales.qty_for(sales, a_, m_)
+        if q > 0:
+            denom_by_am[(a_, m_)] = q
+    sales_qty_total = sum(denom_by_am.values())
+    rate_numer = sum(cnt for (s_, a_, m_), cnt in ev_shop_month.items()
+                     if denom_by_am.get((a_, m_), 0) > 0)
+
+    shop_rate: dict[str, dict] = {}
+    for (s_, a_, m_), cnt in ev_shop_month.items():
+        q = denom_by_am.get((a_, m_), 0)
+        if q <= 0:
+            continue
+        b = shop_rate.setdefault(s_, {"numer": 0, "denom": 0})
+        b["numer"] += cnt
+        b["denom"] += q
+
+    fam_rate: dict[tuple[str, str], dict] = {}
+    prod_denom: dict[tuple[str, str, str], int] = {}
+    prod_numer: dict[str, int] = {}
+    for (s_, f_, a_, m_), cnt in ev_shop_fam_month.items():
+        qf = eccang_sales.qty_for(sales, a_, m_, f_)
+        if qf > 0:
+            prod_denom[(f_, a_, m_)] = qf
+            prod_numer[f_] = prod_numer.get(f_, 0) + cnt
+            fb = fam_rate.setdefault((s_, f_), {"numer": 0, "denom": 0})
+            fb["numer"] += cnt
+            fb["denom"] += qf
+    prod_denom_sum: dict[str, int] = {}
+    for (f_, a_, m_), q in prod_denom.items():
+        prod_denom_sum[f_] = prod_denom_sum.get(f_, 0) + q
+
+    if rate_basis == "eccang_qty":
+        for p_ in products:
+            q = prod_denom_sum.get(p_["product"], 0)
+            p_["sales_qty"] = q
+            p_["rate"] = (round(prod_numer.get(p_["product"], 0) / q, 4) if q else None)
+        for s_ in shop_list:
+            b = shop_rate.get(s_["shop"])
+            s_["sales_qty"] = b["denom"] if b else 0
+            s_["rate"] = (round(b["numer"] / b["denom"], 4) if b and b["denom"] else None)
+            for pr in s_["products"]:
+                fb = fam_rate.get((s_["shop"], pr["product"]))
+                pr["sales_qty"] = fb["denom"] if fb else 0
+                pr["rate"] = (round(fb["numer"] / fb["denom"], 4)
+                              if fb and fb["denom"] else None)
+        shop_list.sort(key=lambda x: (-(x["rate"] if x["rate"] is not None else -1),
+                                     -x["aftersale"]))
+
     # 店铺白名单的执行情况（供前端提示"已按名单过滤"）
     wl_info = {
         "enabled": wl is not None,
@@ -460,14 +595,28 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
                 "店铺白名单里有 %d 个店铺在数据中没找到（可能名字不一致或该店无记录）：%s"
                 % (len(wl_info["missing"]), "、".join(wl_info["missing"][:6])))
 
-    # 缺分母 → 售后率为 None（台账模式）
-    overall_rate = round(aftersale / total, 4) if (total and mode == "detail") else None
+    # 明细模式用表内分母；台账模式用易仓「当月销量件数」作外部分母
+    if mode == "detail":
+        overall_rate = round(aftersale / total, 4) if total else None
+    else:
+        overall_rate = (round(rate_numer / sales_qty_total, 4)
+                        if (rate_basis == "eccang_qty" and sales_qty_total) else None)
+
+    if rate_basis == "eccang_qty":
+        warnings.append(
+            "售后率口径：当月售后事件数 ÷ 易仓同店同月销量件数（自然月）。"
+            "订单号精确匹配 %d 条、未匹配 %d 条；缺日期 %d 条、该月无销量 %d 条不计入率。"
+            % (matched_orders, unmatched_orders, no_month, no_denom))
+    else:
+        warnings.append("尚未同步易仓销量数据，暂按售后登记量展示（不计算售后率）。")
     p(85, "生成售后洞察报告…")
 
-    if mode == "ledger":
-        headline = f"台账模式 · {total} 条售后登记 · 不计算售后率（缺全量订单分母）"
+    if overall_rate is not None:
+        headline = (f"完成 · {total} 条售后 · 销量 {sales_qty_total} 件"
+                    f" · 售后率 {overall_rate:.1%}" if rate_basis == "eccang_qty"
+                    else f"完成 · {total} 单 · 售后率 {overall_rate:.1%}")
     else:
-        headline = f"完成 · {total} 单 · 售后率 {overall_rate:.1%}"
+        headline = f"台账模式 · {total} 条售后登记 · 未取到销量分母"
     p(100, headline)
 
     result = {
@@ -489,6 +638,7 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             "total_orders": total,
             "aftersale_orders": aftersale,
             "overall_rate": overall_rate,
+            "rate_basis": rate_basis,
             "products": products,
             "shops": shop_list,
             "reasons": reason_list,
@@ -496,12 +646,26 @@ def run_aftersale(*, files: list[Path], platform: str, category: str,
             "filtered_out": filtered_out,
             "unknown": unknown,
             "shop_whitelist": wl_info,
+            "sales": {
+                "synced_at": sales.get("synced_at", 0),
+                "months": sales.get("months", []),
+                "accounts": sales.get("accounts", []),
+                "units": sales.get("units", 0),
+                "orders": sales.get("orders", 0),
+                "matched_orders": matched_orders,
+                "unmatched_orders": unmatched_orders,
+                "no_month": no_month,
+                "no_denom": no_denom,
+                "qty_used": sales_qty_total,
+                "account_map": eccang_sales.load_account_map(data_dir),
+            },
         },
         "sources": sources,
         "warnings": warnings,
         "params": {"mode": mode,
                    "columns": {"product": product_cols, "flag": cols["flag"],
-                               "reason": reason_cols, "shop": shop_cols}},
+                               "reason": reason_cols, "shop": shop_cols,
+                               "date": date_cols, "order": order_cols}},
     }
     result["elapsed_sec"] = round(time.time() - t0, 2)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -518,10 +682,21 @@ def _md(r: dict) -> str:
         f"# 售后 VOC 分析 · {r['platform']}",
         "",
     ]
-    if ledger:
+    has_rate = a.get("rate_basis") == "eccang_qty" and a.get("overall_rate") is not None
+    if has_rate:
+        lines += [
+            "> **口径说明**：飞书台账只登记已发生售后的记录；"
+            "分母取自易仓开放平台，售后率 = 当月售后事件数 ÷ 同店同月销量件数（自然月）。",
+            "",
+            f"- 售后登记条数：**{a['total_orders']}**",
+            f"- 纳入计算的销量件数：**{a.get('sales', {}).get('qty_used', 0)}**",
+            f"- 整体售后率：**{a['overall_rate']:.1%}**",
+            f"- 涉及产品数：**{len(a['products'])}**",
+        ]
+    elif ledger:
         lines += [
             "> **口径说明：台账模式**。本表只登记了已发生售后的记录，"
-            "没有全量订单数做分母，因此**不计算售后率**。",
+            "且尚未同步易仓销量数据，因此**不计算售后率**。",
             "",
             f"- 售后登记条数：**{a['total_orders']}**",
             f"- 涉及产品数：**{len(a['products'])}**",
@@ -530,17 +705,18 @@ def _md(r: dict) -> str:
         lines += [
             f"- 总订单数：**{a['total_orders']}**",
             f"- 售后订单数：**{a['aftersale_orders']}**",
-            f"- 整体售后率：**{a['overall_rate']:.1%}**",
+            f"- 整体售后率：**{a['overall_rate']:.1%}**" if a.get("overall_rate") is not None
+            else f"- 总订单数：**{a['total_orders']}**",
         ]
     if a.get("filtered_out"):
         lines.append(f"- 已剔除非售后记录：**{a['filtered_out']}** 条")
     lines += ["", "## 各产品售后率", "",
               "| 产品 | 总单数 | 售后单数 | 售后率 |", "|---|---|---|---|"]
     for p_ in a["products"]:
-        if ledger:
-            lines.append(f"| {p_['product']} | {p_['total']} | {p_['aftersale']} | — |")
-        else:
+        if p_.get("rate") is not None:
             lines.append(f"| {p_['product']} | {p_['total']} | {p_['aftersale']} | {p_['rate']:.1%} |")
+        else:
+            lines.append(f"| {p_['product']} | {p_['total']} | {p_['aftersale']} | — |")
     if a.get("products"):
         lines += ["", "## SKU 合并明细", "",
                   "| 产品族 | 合并 SKU 数 | 售后条数 | 成员 SKU |", "|---|---|---|---|"]

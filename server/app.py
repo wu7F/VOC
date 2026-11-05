@@ -30,6 +30,8 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from . import auth, llm, pipeline, aftersale as aftersale_module, feishu as feishu_module
+from . import eccang as eccang_module
+from . import eccang_sales
 from . import shop_filter
 from . import feishu_sources as fsources
 from .paths import config_path, ensure_dirs, web_dir
@@ -532,11 +534,16 @@ def _run_aftersale_job(did: str, files: list[str], platform: str, category: str,
             data_dir=BASE,
         )
         _a = result["aftersale"]
-        if _a.get("mode") == "ledger":
-            _msg = (f"完成 · {_a['total_orders']} 条售后登记 · 台账模式（不计算售后率）"
+        _rate = _a.get("overall_rate")
+        if _a.get("rate_basis") == "eccang_qty" and _rate is not None:
+            _msg = (f"完成 · {_a['total_orders']} 条售后 / 销量 "
+                    f"{(_a.get('sales') or {}).get('qty_used', 0)} 件 · 售后率 {_rate:.1%}"
+                    f" · {result['elapsed_sec']}s")
+        elif _a.get("mode") == "ledger":
+            _msg = (f"完成 · {_a['total_orders']} 条售后登记 · 台账模式（未取到销量分母）"
                     f" · {result['elapsed_sec']}s")
         else:
-            _msg = (f"完成 · {_a['total_orders']} 单 · 售后率 {_a['overall_rate']:.1%}"
+            _msg = (f"完成 · {_a['total_orders']} 单 · 售后率 {_rate:.1%}"
                     f" · {result['elapsed_sec']}s")
         store.update(
             did, status="done", progress=100,
@@ -571,6 +578,8 @@ def api_aftersale_summary():
     """
     roll = {"platforms": {}, "products": {}, "reasons": {}, "categories": {}, "shops": {}}
     modes: list[str] = []
+    bases: list[str] = []
+    qty_by_platform: dict[str, int] = {}
     with _STORE_LOCK:
         recs = [d for d in store._data["datasets"]
                 if d.get("platform") in AFTERSALE_PLATFORMS and d.get("status") == "done"]
@@ -587,6 +596,9 @@ def api_aftersale_summary():
         if not a:
             continue
         modes.append(a.get("mode", "detail"))
+        bases.append(a.get("rate_basis") or ("detail" if a.get("mode") == "detail" else "none"))
+        qty_by_platform[p] = qty_by_platform.get(p, 0) + int(
+            (a.get("sales") or {}).get("qty_used") or 0)
         pf = roll["platforms"].setdefault(p, {"platform": p, "total": 0, "aftersale": 0})
         pf["total"] += a["total_orders"]
         pf["aftersale"] += a["aftersale_orders"]
@@ -607,16 +619,24 @@ def api_aftersale_summary():
             bucket["records"] += sh.get("records", 0)
             bucket["aftersale"] += sh.get("aftersale", 0)
 
-    # 只要有任一数据集是台账模式，整体就不给售后率（分母口径不一致）
-    ledger = "ledger" in modes
-    overall_mode = "ledger" if ledger else "detail"
+    # 台账模式若已从易仓拿到销量分母，就用「售后事件 ÷ 销量件数」算真售后率；
+    # 否则按原逻辑：只要混有台账数据就不给率，避免口径不一致。
+    external = bool(bases) and all(b == "eccang_qty" for b in bases)
+    ledger = ("ledger" in modes) and not external
+    overall_mode = "eccang_qty" if external else ("ledger" if ledger else "detail")
 
-    def _rate(b):
-        b["rate"] = round(b["aftersale"] / b["total"], 4) if (b["total"] and not ledger) else None
+    def _rate(b, qty: int = 0):
+        if external and qty:
+            b["rate"] = round(b["aftersale"] / qty, 4)
+        elif b["total"] and not ledger:
+            b["rate"] = round(b["aftersale"] / b["total"], 4)
+        else:
+            b["rate"] = None
         return b
 
-    platforms = sorted((_rate(v) for v in roll["platforms"].values()),
-                      key=lambda x: (-(x["rate"] or 0), -x["total"]))
+    platforms = sorted((_rate(v, qty_by_platform.get(v["platform"], 0))
+                        for v in roll["platforms"].values()),
+                       key=lambda x: (-(x["rate"] or 0), -x["total"]))
     products = sorted((_rate(v) for v in roll["products"].values()),
                      key=lambda x: (x["platform"], -(x["rate"] or 0), -x["total"]))
     rsum = sum(roll["reasons"].values()) or 1
@@ -640,7 +660,10 @@ def api_aftersale_summary():
         "mode": overall_mode,
         "overall": {
             "total": tot, "aftersale": aft,
-            "rate": (round(aft / tot, 4) if (tot and not ledger) else None),
+            "sales_qty": sum(qty_by_platform.values()),
+            "rate": (round(aft / sum(qty_by_platform.values()), 4)
+                     if (external and sum(qty_by_platform.values()))
+                     else (round(aft / tot, 4) if (tot and not ledger) else None)),
         },
         "datasets": len(recs),
     }
@@ -727,6 +750,8 @@ def _aftersale_columns(headers: list[str], rows: list[dict] | None = None) -> di
             "flag": (d.get("flag") or [""])[0],
             "reason": (d.get("reason") or [""])[0],
             "shop": (d.get("shop") or [""])[0],
+            "date": (d.get("date") or [""])[0],
+            "order": (d.get("order") or [""])[0],
             "mode": d.get("mode", ""),
             "flag_candidates": d.get("flag_candidates") or [],
         }
@@ -776,6 +801,59 @@ def api_shop_whitelist_put(req: ShopWhitelistReq):
     """保存店铺白名单。保存后需要重新同步/重跑分析才生效。"""
     saved = shop_filter.save(BASE, req.shops, req.enabled)
     return {"ok": True, **saved}
+
+
+# ---------------------------------------------------------------------------
+# 易仓销量分母：售后率 = 当月售后事件数 ÷ 同店同月销量件数
+# ---------------------------------------------------------------------------
+
+class EccangSalesSyncReq(BaseModel):
+    full: bool = False
+    with_detail: bool = False
+    since: str = "2026-01-01 00:00:00"
+
+
+class EccangConfigReq(BaseModel):
+    app_key: str = ""
+    app_secret: str = ""
+    service_id: str = ""
+
+
+@app.get("/api/eccang/sales")
+def api_eccang_sales():
+    """销量缓存状态：是否已配置凭证、上次同步时间、覆盖月份、销量件数、同步进度。"""
+    return eccang_sales.status(BASE)
+
+
+@app.post("/api/eccang/sales/sync")
+def api_eccang_sales_sync(req: EccangSalesSyncReq):
+    """后台拉易仓销量（full=true 全量重拉；默认增量）。立即返回，前端轮询进度。"""
+    return eccang_sales.start_sync(BASE, full=bool(req.full),
+                                   with_detail=bool(req.with_detail),
+                                   since=req.since or "2026-01-01 00:00:00")
+
+
+@app.post("/api/eccang/config")
+def api_eccang_config_save(req: EccangConfigReq):
+    """保存易仓开放平台凭证到 data/eccang_config.json（不进代码仓库）。"""
+    if not (req.app_key.strip() and req.app_secret.strip() and req.service_id.strip()):
+        raise HTTPException(400, jsonable_error(
+            "请填写 app_key / app_secret / 授权服务ID（service_id）。"))
+    cfg = eccang_module.save_config(BASE, req.app_key, req.app_secret, req.service_id)
+    return {"ok": True, "configured": True, "source": cfg.get("source", "")}
+
+
+def _maybe_sync_sales(max_age_hours: int = 20) -> None:
+    """飞书每日同步时顺带刷新销量分母（后台执行，不阻塞本次同步）。"""
+    try:
+        st = eccang_sales.status(BASE)
+        if not st.get("configured") or (st.get("sync") or {}).get("running"):
+            return
+        last = st.get("synced_at") or 0
+        if not last or (time.time() - last) > max_age_hours * 3600:
+            eccang_sales.start_sync(BASE, full=not bool(last))
+    except Exception as e:  # noqa: BLE001
+        print("[VOC] 易仓销量同步触发失败：%r" % (e,), file=sys.stderr)
 
 
 @app.get("/api/feishu/config")
@@ -828,6 +906,9 @@ def _sync_source(src: dict, app_id: str = "", app_secret: str = "") -> dict:
     platform = src.get("platform") or "AmazonCs"
     if not url:
         return {"ok": False, "message": "未配置表格链接", "dataset_id": ""}
+
+    # 每天刷新一次易仓销量分母（后台线程，不阻塞飞书同步）
+    _maybe_sync_sales()
 
     aid, sec, _ = _feishu_creds(app_id, app_secret)
     if not aid or not sec:

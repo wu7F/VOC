@@ -1065,6 +1065,7 @@ table.tbl tr.clickable { cursor: pointer; }
 }
 .fr-sep { color: var(--border-strong); }
 .fr-btn { margin-left: auto; font-size: 12px; padding: 4px 12px; }
+.fr-btn + .fr-btn { margin-left: 0; }
 
 .as-shop-grid {
   display: grid; gap: 10px;
