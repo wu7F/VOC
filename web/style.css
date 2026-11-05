@@ -1129,3 +1129,5 @@ table.tbl tr.clickable { cursor: pointer; }
   padding: 12px 18px; border-top: 1px solid var(--border);
 }
 .fr-wl { color: var(--accent); font-weight: 500; }
+.fr-wl#asSalesTxt { max-width: 100%; word-break: break-word; }
+.fr-warn { color: var(--neg); font-weight: 500; }

@@ -833,6 +833,12 @@ def api_eccang_sales_sync(req: EccangSalesSyncReq):
                                    since=req.since or "2026-01-01 00:00:00")
 
 
+@app.post("/api/eccang/sales/cancel")
+def api_eccang_sales_cancel():
+    """中止卡住/不想继续的销量同步，已完成店铺保留，下次断点续传。"""
+    return eccang_sales.cancel(BASE)
+
+
 @app.post("/api/eccang/config")
 def api_eccang_config_save(req: EccangConfigReq):
     """保存易仓开放平台凭证到 data/eccang_config.json（不进代码仓库）。"""

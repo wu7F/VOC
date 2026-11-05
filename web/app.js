@@ -1980,12 +1980,22 @@ function startSalesPoll(src) {
     }
     try {
       const st = await (await api('/api/eccang/sales')).json();
-      const sb = $('#asSyncSales');
-      if (st.sync && st.sync.running) {
-        if (sb) sb.textContent = `同步中 ${st.sync.progress || 0}%`;
+      const sy = st.sync || {};
+      if (sy.running) {
+        // 进度按「页」实时刷新；同时显示当前店铺/页/耗时，避免看起来像卡死
+        const stall = (sy.stalled_sec || 0) > 120
+          ? ' · ⚠ 超过 2 分钟无响应，可点「中止同步」' : '';
+        const t = $('#asSalesTxt');
+        if (t) t.textContent = `销量同步中 ${sy.progress || 0}%（${sy.message || '准备中…'}）${stall}`;
+        const sb = $('#asSyncSales');
+        if (sb) { sb.textContent = '中止同步'; sb.dataset.mode = 'cancel'; sb.disabled = false; }
         return;
       }
       clearInterval(salesPollTimer); salesPollTimer = null;
+      if (sy.cancelled || sy.error) {   // 中止/失败：只刷新状态条，不用半截分母重算看板
+        await renderAsFresh();
+        return;
+      }
       const out = await (await api(`/api/feishu/sources/${src.id}/sync`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
       if (out && out.ok && out.dataset_id) await openDataset(out.dataset_id);
@@ -2018,16 +2028,25 @@ async function renderAsFresh() {
   const wlTxt = wl.enabled
     ? `<span class="fr-sep">·</span><span class="fr-wl">只统计 ${(wl.shops || []).length} 个店铺，已排除 ${wl.excluded_records || 0} 条</span>`
     : `<span class="fr-sep">·</span><span>统计全部店铺</span>`;
+  const sy = (sales && sales.sync) || {};
+  const running = !!sy.running;
+  const pending = ((sales && sales.pending_accounts) || []).length;
+  const doneN = ((sales && sales.done_accounts) || []).length;
+  const needResume = !running && pending > 0 && doneN > 0;
   let salesTxt = '';
   if (sales) {
     if (!sales.configured) {
-      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl">易仓销量未配置（暂按登记量展示）</span>`;
-    } else if (sales.sync && sales.sync.running) {
-      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl">销量同步中 ${sales.sync.progress || 0}%</span>`;
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl" id="asSalesTxt">易仓销量未配置（暂按登记量展示）</span>`;
+    } else if (running) {
+      const stall = (sy.stalled_sec || 0) > 120 ? ' · ⚠ 超过 2 分钟无响应' : '';
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl" id="asSalesTxt">销量同步中 ${sy.progress || 0}%（${esc(sy.message || '准备中…')}）${stall}</span>`;
     } else {
-      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl">销量分母 ${esc(fmt(sales.synced_at))} · ${sales.units || 0} 件 / ${(sales.months || []).length} 个月</span>`;
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl" id="asSalesTxt">销量分母 ${esc(fmt(sales.synced_at))} · ${sales.units || 0} 件 / ${(sales.months || []).length} 个月</span>`;
     }
   }
+  const errTip = needResume
+    ? `<span class="fr-sep">·</span><span class="fr-warn">有 ${pending} 个店铺未完成，分母可能不完整</span>`
+    : '';
   el.innerHTML = `
     <span class="fr-dot"></span>
     <b>${esc(src.name || '飞书数据源')}</b>
@@ -2038,8 +2057,9 @@ async function renderAsFresh() {
     <span>下次约 ${esc(fmt(nextAt))}</span>
     ${wlTxt}
     ${salesTxt}
+    ${errTip}
     ${sales && !sales.configured ? `<button class="btn-ghost fr-btn" id="asEcConfig">配置销量数据源</button>` : ''}
-    ${sales && sales.configured ? `<button class="btn-ghost fr-btn" id="asSyncSales">更新销量</button>` : ''}
+    ${sales && sales.configured ? `<button class="btn-ghost fr-btn" id="asSyncSales" data-mode="${running ? 'cancel' : 'sync'}">${running ? '中止同步' : (needResume ? `继续同步（还剩 ${pending} 店）` : '更新销量')}</button>` : ''}
     <button class="btn-ghost fr-btn" id="asSyncNow">立即更新</button>`;
   const cfgBtn = $('#asEcConfig');
   if (cfgBtn) cfgBtn.onclick = async () => {
@@ -2071,18 +2091,26 @@ async function renderAsFresh() {
   };
   const sb = $('#asSyncSales');
   if (sb) sb.onclick = async () => {
+    const mode = sb.dataset.mode || 'sync';
     sb.disabled = true;
     const old = sb.textContent;
-    sb.textContent = '同步中…';
+    sb.textContent = mode === 'cancel' ? '中止中…' : '启动中…';
     try {
-      await api('/api/eccang/sales/sync', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full: !(sales && sales.synced_at) })
-      });
-      startSalesPoll(src);     // 首次全量较久，后台轮询，完成后自动刷新看板
+      if (mode === 'cancel') {
+        await api('/api/eccang/sales/cancel', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+        });
+        startSalesPoll(src);   // 轮询发现结束后刷新状态条，按钮变「继续同步」
+      } else {
+        await api('/api/eccang/sales/sync', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full: !(sales && sales.synced_at) })
+        });
+        startSalesPoll(src);   // 首次全量较久，后台轮询，完成后自动刷新看板
+      }
       setTimeout(() => { sb.disabled = false; sb.textContent = old; }, 2000);
     } catch (e) {
-      sb.textContent = '同步失败';
+      sb.textContent = '操作失败';
       setTimeout(() => { sb.disabled = false; sb.textContent = old; }, 2500);
     }
   };

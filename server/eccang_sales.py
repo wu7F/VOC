@@ -45,10 +45,17 @@ DEFAULT_ACCOUNT_MAP = {
     "香港店": ["KornerHK_US"],
 }
 
-# 同步状态（进程内，供 API 查询进度）
+# 同步状态（进程内，供 API 查询进度）。
+# 进度按「页」实时刷新：一个店铺常有几十页，只按店铺刷新会长时间停在同一数字，
+# 看起来像卡死。last_tick 用于判断线程是否真的还在推进。
 _SYNC = {"running": False, "progress": 0, "message": "", "started_at": 0,
-         "finished_at": 0, "error": "", "full": False}
+         "finished_at": 0, "error": "", "full": False,
+         "account": "", "shop_label": "", "shop_no": 0, "shop_total": 0,
+         "page": 0, "pages": 0, "fetched": 0, "last_tick": 0,
+         "cancelled": False}
 _SYNC_LOCK = threading.Lock()
+_CANCEL = threading.Event()
+PAGE_SIZE = 100   # 易仓硬上限：page_size>100 会返回 getOrderListConError
 
 
 # ---------------------------------------------------------------- 配置 / 缓存
@@ -121,6 +128,13 @@ def status(data_dir) -> dict:
     cfg = eccang.load_config(data_dir)
     with _SYNC_LOCK:
         st = dict(_SYNC)
+    now = time.time()
+    if st.get("running"):
+        st["elapsed_sec"] = int(now - (st.get("started_at") or now))
+        st["stalled_sec"] = int(now - (st.get("last_tick") or st.get("started_at") or now))
+    else:
+        st["elapsed_sec"] = 0
+        st["stalled_sec"] = 0
     qty = c.get("qty") or {}
     units = sum(sum(m.values()) for m in qty.values() if isinstance(m, dict))
     return {
@@ -138,6 +152,8 @@ def status(data_dir) -> dict:
         "errors": (c.get("errors") or [])[-5:],
         "sync": st,
         "account_map": load_account_map(data_dir),
+        "pending_accounts": [a for a in accounts_for_shops(data_dir)
+                             if a not in set(c.get("done_accounts") or [])],
     }
 
 
@@ -218,8 +234,13 @@ def sync(data_dir, *, full: bool = False, progress=None,
     with _SYNC_LOCK:
         if _SYNC["running"]:
             return status(data_dir)
+        now = time.time()
         _SYNC.update(running=True, progress=0, message="准备中…",
-                     started_at=time.time(), error="", full=bool(full))
+                     started_at=now, last_tick=now, finished_at=0,
+                     error="", full=bool(full), cancelled=False,
+                     account="", shop_label="", shop_no=0, shop_total=0,
+                     page=0, pages=0, fetched=0)
+    _CANCEL.clear()
     try:
         return _sync_inner(data_dir, full=full, progress=progress,
                            shops=shops, max_pages=max_pages,
@@ -227,7 +248,8 @@ def sync(data_dir, *, full: bool = False, progress=None,
     except Exception as e:  # noqa: BLE001
         with _SYNC_LOCK:
             _SYNC.update(running=False, progress=100, finished_at=time.time(),
-                         message="同步失败", error=str(e)[:400])
+                         last_tick=time.time(), message="同步失败",
+                         error=str(e)[:400])
         c = load(data_dir)
         errs = list(c.get("errors") or [])
         errs.append({"at": time.time(), "error": str(e)[:300]})
@@ -241,11 +263,16 @@ def sync(data_dir, *, full: bool = False, progress=None,
 
 def _sync_inner(data_dir, *, full, progress, shops, max_pages,
                 with_detail, since) -> dict:
-    def p(pct: int, msg: str) -> None:
+    def p(pct: int, msg: str, **kw) -> None:
         with _SYNC_LOCK:
-            _SYNC.update(progress=max(0, min(100, int(pct))), message=msg)
+            _SYNC.update(progress=max(0, min(100, int(pct))), message=msg,
+                         last_tick=time.time(), **kw)
         if progress:
             progress(pct, msg)
+
+    def _elapsed() -> str:
+        s = int(time.time() - t_start)
+        return "%d分%02d秒" % (s // 60, s % 60)
 
     cfg = eccang.load_config(data_dir)
     if not (cfg.get("app_key") and cfg.get("app_secret") and cfg.get("service_id")):
@@ -260,6 +287,10 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
     accounts = accounts_for_shops(data_dir, shops)
     if not accounts:
         raise RuntimeError("没有可同步的店铺账号（店铺→账号映射为空）。")
+    labels: dict[str, str] = {}
+    for _shop, _accs in load_account_map(data_dir).items():
+        for _acc in _accs:
+            labels.setdefault(_acc, _shop)
 
     cache = load(data_dir)
     if not cache.get("order_index"):
@@ -275,6 +306,7 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
     errors: list[dict] = []
 
     now = time.time()
+    t_start = now
     if full:
         start = since or "2026-01-01 00:00:00"
     else:
@@ -289,16 +321,28 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
     pending = [a for a in accounts if a not in done] if full else list(accounts)
     total_accounts = len(pending) or 1
 
+    all_ok = True
+    cancelled = False
     for ai, acc in enumerate(pending):
-        p(int(5 + 85 * ai / total_accounts),
-          "同步店铺销量 %d/%d：%s" % (ai + 1, total_accounts, acc))
+        label = labels.get(acc, acc)
+        base_pct = int(5 + 85 * ai / total_accounts)
+        p(base_pct, "开始同步 %s（%d/%d 店）" % (label, ai + 1, total_accounts),
+          account=acc, shop_label=label, shop_no=ai + 1,
+          shop_total=total_accounts, page=0, pages=0, fetched=added)
         acc_qty = qty.setdefault(acc, {})
         acc_fam = qfam.setdefault(acc, {})
+        acc_added = 0
+        pages_hint = 0
+        finished_ok = True
+        reached_end = False
         last_page = 0
         for page in range(1, max_pages + 1):
+            if _CANCEL.is_set():
+                cancelled, finished_ok = True, False
+                break
             last_page = page
             biz = {
-                "page": page, "page_size": 100,
+                "page": page, "page_size": PAGE_SIZE,
                 "get_detail": 1 if with_detail else 0,
                 "condition": {
                     "platform": "AMAZON",
@@ -308,14 +352,32 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
                 },
             }
             try:
-                data = eccang._unwrap(eccang.call("getOrderList", biz, cfg=cfg))
+                data = eccang._unwrap(eccang.call("getOrderList", biz, cfg=cfg,
+                                                  timeout=35))
             except eccang.EccangError as e:
                 errors.append({"at": time.time(), "account": acc, "page": page,
                                "error": str(e)[:200]})
+                finished_ok = False
                 break
             rows = data.get("data") if isinstance(data, dict) else None
             rows = rows if isinstance(rows, list) else []
+            try:
+                total_hint = int(float(str(data.get("total") or 0)))
+            except Exception:
+                total_hint = 0
+            if total_hint > 0:
+                pages_hint = max(1, (total_hint + PAGE_SIZE - 1) // PAGE_SIZE)
+            frac = min(0.98, page / (pages_hint or max_pages))
+            # 每拉完一页就刷新进度 + 心跳，避免大店铺几十页停在同一数字
+            p(int(5 + 85 * (ai + frac) / total_accounts),
+              "同步 %s %d/%d 店 · 第 %d%s 页 · 已拉 %d 单 · 已用 %s" %
+              (label, ai + 1, total_accounts, page,
+               ("/%d" % pages_hint) if pages_hint else "", added, _elapsed()),
+              account=acc, shop_label=label, shop_no=ai + 1,
+              shop_total=total_accounts, page=page, pages=pages_hint,
+              fetched=added)
             if not rows:
+                reached_end = True
                 break
             for od in rows:
                 code = str(od.get("order_code") or od.get("refrence_no") or "").strip().upper()
@@ -327,6 +389,7 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
                     index[code] = {"a": acc, "m": month}
                     seen.add(code)
                 added += 1
+                acc_added += 1
                 if not month:
                     continue
                 m_qty = acc_qty.setdefault(month, 0)
@@ -347,13 +410,28 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
                     except Exception:
                         pass
                 acc_qty[month] = m_qty
-            if len(rows) < 100:
+            if len(rows) < PAGE_SIZE:
+                reached_end = True
                 break
-        if last_page >= max_pages:
+        if last_page >= max_pages and not reached_end and not cancelled:
             errors.append({"at": time.time(), "account": acc,
                            "error": "达到最大页数上限，可能未拉全"})
-        # 每完成一个账号就落盘：首次全量较久，中途重启可断点续传
-        done.add(acc)
+            finished_ok = False
+        # 只有完整拉完的店铺才标记完成：中途失败/中止的店铺下次会自动重试，
+        # 否则会被永久跳过，分母缺一块却查不出来。
+        if finished_ok:
+            done.add(acc)
+            p(int(5 + 85 * (ai + 1) / total_accounts),
+              "%s 完成 · %d 单" % (label, acc_added),
+              account=acc, shop_label=label, shop_no=ai + 1,
+              shop_total=total_accounts, page=last_page, pages=pages_hint,
+              fetched=added)
+        else:
+            all_ok = False
+            errors.append({"at": time.time(), "account": acc,
+                           "error": "用户中止" if cancelled else
+                                    "该店铺未拉完，下次同步自动重试（已拉部分不会重复计数）"})
+        # 每完成一个账号就落盘：首次全量较久，中途重启/中止可断点续传
         cache["done_accounts"] = sorted(done)
         cache["orders"] = len(index)
         cache["units"] = sum(sum(v.values()) for v in qty.values() if isinstance(v, dict))
@@ -361,12 +439,13 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
             _save(data_dir, cache)
         except Exception:
             pass
+        if cancelled:
+            break
 
+    finished = time.time()
     months = sorted({m for v in qty.values() if isinstance(v, dict) for m in v})
     cache.update({
         "version": 1,
-        "synced_at": now,
-        "sys_cursor": _fmt(now - 7200),   # 增量游标往前留 2 小时，防边界漏单
         "months": months,
         "accounts": accounts,
         "done_accounts": sorted(done),
@@ -375,13 +454,42 @@ def _sync_inner(data_dir, *, full, progress, shops, max_pages,
         "units": sum(sum(v.values()) for v in qty.values() if isinstance(v, dict)),
         "errors": (cache.get("errors") or [])[-5:] + errors,
     })
+    # 只有全部成功才推进游标 / 标记完成时间，避免半途数据被当成完整分母
+    if all_ok and not cancelled:
+        cache["synced_at"] = finished
+        cache["sys_cursor"] = _fmt(finished - 7200)  # 增量游标往前留 2 小时
     cache["errors"] = cache["errors"][-10:]
     _save(data_dir, cache)
-    p(100, "销量同步完成：%d 个账号 / %d 个月 / 新增 %d 单" %
-      (len(accounts), len(months), added))
     with _SYNC_LOCK:
-        _SYNC.update(running=False, progress=100, finished_at=time.time())
+        cur_pct = _SYNC["progress"]
+    if all_ok and not cancelled:
+        p(100, "销量同步完成：%d 个账号 / %d 个月 / 新增 %d 单" %
+          (len(accounts), len(months), added))
+        with _SYNC_LOCK:
+            _SYNC.update(running=False, progress=100, finished_at=finished)
+    else:
+        msg = ("已中止 · 已完成店铺已保存，点「继续同步」接着跑" if cancelled else
+               "部分店铺未拉完 · 已保存进度，下次同步自动重试")
+        p(cur_pct, msg)
+        with _SYNC_LOCK:
+            _SYNC.update(running=False, finished_at=finished, error=msg,
+                         cancelled=bool(cancelled))
     return status(data_dir)
+
+
+def cancel(data_dir) -> dict:
+    """中止当前同步（在当前页请求返回后生效，最长约 35 秒）。
+
+    已完成店铺的销量会保留，下次同步自动跳过并从中断的店铺继续。
+    """
+    with _SYNC_LOCK:
+        running = bool(_SYNC["running"])
+    if running:
+        _CANCEL.set()
+        return {"ok": True, "message": "已发出中止请求，等待当前页返回…",
+                "sync": status(data_dir)["sync"]}
+    return {"ok": True, "message": "当前没有正在运行的同步",
+            "sync": status(data_dir)["sync"]}
 
 
 def start_sync(data_dir, *, full: bool = False, shops: list[str] | None = None,
