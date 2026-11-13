@@ -523,9 +523,9 @@ function renderPlatformTabs() {
       const pid = b.dataset.p;
       state.platform = pid;
       applyPlatform(pid);
-      // 售后平台：点子标签也要直接进该平台的售后看板，而不是停在新建分析表单
+      // 售后平台：点子标签只刷新数据源/到期同步，停留在新建分析表单；打开报告走侧栏
       const p = state.platforms.find(x => x.id === pid);
-      if (p && p.kind === 'aftersale') openAftersaleOverview(pid);
+      if (p && p.kind === 'aftersale') openAftersaleOverview(pid, { open: false });
     };
   });
 }
@@ -538,12 +538,12 @@ function applyGroup(g) {
   renderPlatformTabs();
   updateGroupUI();
   applyPlatform(state.platform);
-  // 售后VOC 父板块：直接进「平台总售后看板」，不显示新建分析表单
-  if (g === '售后VOC') openAftersaleOverview();
+  // 售后VOC 父板块：只刷新数据源/到期同步，停留在新建分析表单；打开报告走侧栏
+  if (g === '售后VOC') openAftersaleOverview(undefined, { open: false });
 }
 
 /* 售后VOC 父板块落地页：优先用飞书数据源（到期自动同步），否则打开最新报告 */
-async function openAftersaleOverview(pid) {
+async function openAftersaleOverview(pid, opts = {}) {
   // 目标平台：优先用传入的（点子标签时），否则用当前平台
   const want = pid || state.platform;
   const request = ++state.viewRequest;
@@ -579,6 +579,9 @@ async function openAftersaleOverview(pid) {
       }
     } catch (e) { /* 取源/同步失败：继续用已有报告，不要因此停在表单页 */ }
     if (!current()) return;
+
+    // 仅做数据源刷新/到期同步，不自动打开报告（点击平台标签时使用）
+    if (opts.open === false) return;
 
     // 2) 该平台最新一份已完成报告
     let d = newest(state.datasets.filter(x => x.status === 'done' && x.platform === want))[0];

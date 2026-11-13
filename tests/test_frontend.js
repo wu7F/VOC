@@ -13,6 +13,13 @@ function section(start, end) {
   return code.slice(from, to);
 }
 const functions = [
+  section('function esc(', 'function toast('),
+  section('function renderPlatformGroups(', '/* 售后VOC 父板块落地页'),
+  section('function updateGroupUI(', 'async function openAftersaleSummary('),
+  section('function updateFeishuUI(', 'function fsNote('),
+  section('function hexA(', 'async function loadDatasets('),
+  section('async function loadDatasets(', '/* 记录列表：'),
+  section('function applyPlatformTexts(', '/* ============================ 分析引擎'),
   section('async function openAftersaleOverview(', 'function syncGroupFromPlatform()'),
   section('function applyPlatform(', 'function applyPlatformTexts('),
   section('function watchJob(', 'function bindResultEvents()'),
@@ -26,23 +33,44 @@ function gate() {
   return { promise, resolve, reject };
 }
 const platforms = [
-  { id: 'AmazonCs', kind: 'aftersale', group: '售后VOC' },
-  { id: 'WayfairCs', kind: 'aftersale', group: '售后VOC' },
-  { id: 'Amazon', kind: 'ecommerce', group: '产品VOC' },
+  { id: 'AmazonCs', color: '#446688', label_cn: 'Amazon售后', kind: 'aftersale', group: '售后VOC' },
+  { id: 'WayfairCs', color: '#446688', label_cn: 'Wayfair售后', kind: 'aftersale', group: '售后VOC' },
+  { id: 'Amazon', color: '#446688', label_cn: 'Amazon', kind: 'ecommerce', group: '产品VOC' },
 ];
 function context() {
   const state = vm.runInNewContext(initialState + '\nstate;');
-  Object.assign(state, { platforms, platform: 'AmazonCs', datasets: [
+  Object.assign(state, { platforms, platform: 'AmazonCs', group: '售后VOC', datasets: [
     { id: 'AMAZON_REPORT', platform: 'AmazonCs', status: 'done', created_at: '2026-11-10' },
     { id: 'WAYFAIR_REPORT', platform: 'WayfairCs', status: 'done', created_at: '2026-11-10' },
   ], sources: [], current: null, result: null, reportMd: '', files: ['pending.csv'] });
   const effects = [], events = [], elements = new Map();
   const routes = new Map();
+  const buttons = new Map();
+  function element(selector) {
+    if (!elements.has(selector)) {
+      const el = { style: {}, hidden: true, textContent: '', className: '', value: '' };
+      if (selector === '#platformTabs' || selector === '#platformGroups') {
+        const key = selector === '#platformTabs' ? 'p' : 'g';
+        let html = '';
+        Object.defineProperty(el, 'innerHTML', {
+          get: () => html,
+          set: value => {
+            html = value;
+            buttons.set(selector, [...value.matchAll(new RegExp('data-' + key + '="([^"]+)"', 'g'))]
+              .map(match => ({ dataset: { [key]: match[1] }, classList: { toggle() {} } })));
+          },
+        });
+      }
+      elements.set(selector, el);
+    }
+    return elements.get(selector);
+  }
   const c = { state, effects, events, Date, console, routes,
-    loadDatasets: async () => {},
+    document: { documentElement: { style: { setProperty() {} } } },
     api: async (p, options) => {
-      effects.push({ path: p, method: options?.method || 'GET' });
+      effects.push({ path: p, method: options?.method || 'GET', body: options?.body });
       if (routes.has(p)) return routes.get(p)(options);
+      if (p === '/api/datasets') return { json: async () => ({ datasets: state.datasets }) };
       if (p === '/api/feishu/sources') return { json: async () => ({ sources: state.sources }) };
       const [, id, suffix] = p.match(/^\/api\/datasets\/([^/]+)(?:\/(result|report))?$/) || [];
       const rec = state.datasets.find(row => row.id === id);
@@ -51,12 +79,12 @@ function context() {
       if (suffix === 'report') return { text: async () => `Report ${id}` };
       return { json: async () => rec };
     },
-    $: selector => {
-      if (!elements.has(selector)) elements.set(selector, { style: {}, hidden: true, textContent: '', className: '' });
-      return elements.get(selector);
+    $: element,
+    $$: selector => {
+      if (selector === '#platformTabs button') return buttons.get('#platformTabs') || [];
+      if (selector === '#platformGroups button') return buttons.get('#platformGroups') || [];
+      return [];
     },
-    $$: () => [],
-    showView: view => { state.view = view; effects.push({ view }); },
     renderAftersale: () => effects.push({ rendered: state.current.id, resultPlatform: state.result.platform }),
     renderResult: () => effects.push({ rendered: state.current.id, resultPlatform: state.result.platform }),
     EventSource: class {
@@ -64,11 +92,20 @@ function context() {
       close() { this.closed = true; }
     },
   };
-  for (const fn of ['syncGroupFromPlatform', 'applyPlatformTexts', 'updateFeishuUI',
+  for (const fn of ['syncGroupFromPlatform',
     'renderDemos', 'renderDatasets', 'resizeAllCharts', 'renderFileList',
     'updateStartState', 'showError', 'toast']) c[fn] = () => {};
   vm.createContext(c);
   vm.runInContext(functions, c);
+  // Observe completion of the real asynchronous function invoked by onclick.
+  // Do not let an arbitrary number of microtasks hide a late report opening.
+  c.overviews = [];
+  const overview = c.openAftersaleOverview;
+  c.openAftersaleOverview = (...args) => {
+    const task = overview(...args);
+    c.overviews.push(task);
+    return task;
+  };
   return c;
 }
 async function tick() { for (let i = 0; i < 20; i++) await Promise.resolve(); }
@@ -226,6 +263,184 @@ test('Navigation during the completion refresh invalidates the old SSE continuat
   assertWayfair(c);
 });
 
+test('Parent aftersale group tab stays in setup and does not open a report', async () => {
+  const c = context();
+  c.state.platform = 'AmazonCs';
+  c.state.sources = [{ id: 'AMAZON_SOURCE', platform: 'AmazonCs', auto_sync: false }];
+  c.state.group = '产品VOC';
+  c.renderPlatformGroups();
+  c.$$('#platformGroups button').find(b => b.dataset.g === '售后VOC').onclick();
+  await Promise.all(c.overviews);
+  assert.equal(c.overviews.length, 1);
+  assert.equal(c.state.view, 'setup');
+  assert.equal(c.state.current, null);
+  assert.deepEqual(renders(c), []);
+  assert.equal(c.effects.filter(e => e.method === 'POST').length, 0);
+});
+
+test('Child aftersale platform tab stays in setup, no report open, no sync when not due', async () => {
+  const c = context();
+  c.state.platform = 'AmazonCs';
+  c.state.sources = [{ id: 'WAYFAIR_SOURCE', platform: 'WayfairCs', auto_sync: true,
+    interval_min: 1440, last_sync_at: Date.now() / 1000 - 3600 }];
+  c.renderPlatformTabs();
+  const button = c.$$('#platformTabs button').find(b => b.dataset.p === 'WayfairCs');
+  assert.ok(button, 'WayfairCs button must be rendered');
+  button.onclick();
+  await Promise.all(c.overviews);
+  assert.equal(c.overviews.length, 1);
+  assert.equal(c.state.platform, 'WayfairCs');
+  assert.equal(c.state.view, 'setup');
+  assert.equal(c.state.current, null);
+  assert.deepEqual(renders(c), []);
+  assert.equal(c.effects.filter(e => e.method === 'POST').length, 0);
+  assert.equal(c.effects.filter(e => /^\/api\/datasets\/[^/]+$/.test(e.path)).length, 0);
+});
+
+test('Child aftersale platform tab still triggers due source sync but stays in setup', async () => {
+  const c = context();
+  c.state.platform = 'AmazonCs';
+  c.state.sources = [
+    { id: 'AMAZON_SOURCE', platform: 'AmazonCs', auto_sync: true, last_sync_at: 0 },
+    { id: 'WAYFAIR_SOURCE', platform: 'WayfairCs', auto_sync: true,
+      interval_min: 1440, last_sync_at: Date.now() / 1000 - 2 * 86400 },
+  ];
+  c.routes.set('/api/feishu/sources/WAYFAIR_SOURCE/sync', async () => ({}));
+  c.renderPlatformTabs();
+  const button = c.$$('#platformTabs button').find(b => b.dataset.p === 'WayfairCs');
+  assert.ok(button, 'WayfairCs button must be rendered');
+  button.onclick();
+  await Promise.all(c.overviews);
+  assert.equal(c.overviews.length, 1);
+  assert.deepEqual(c.effects.filter(e => e.method === 'POST').map(e => e.path),
+    ['/api/feishu/sources/WAYFAIR_SOURCE/sync']);
+  assert.equal(c.effects.find(e => e.method === 'POST').body, '{}');
+  assert.equal(c.effects.filter(e => e.path === '/api/datasets').length, 2);
+  assert.equal(c.state.view, 'setup');
+  assert.equal(c.state.current, null);
+  assert.deepEqual(renders(c), []);
+});
+
+test('Manual sidebar openDataset still opens the report', async () => {
+  const c = context();
+  await c.openDataset('WAYFAIR_REPORT');
+  assertWayfair(c);
+});
+
+test('Same-platform applyPlatform during a pending open:false request keeps setup', async () => {
+  const c = context(), pending = gate(), entered = gate();
+  c.routes.set('/api/feishu/sources', async () => {
+    entered.resolve(); await pending.promise;
+    return { json: async () => ({ sources: [] }) };
+  });
+  const old = c.openAftersaleOverview('AmazonCs', { open: false });
+  await entered.promise;
+  c.applyPlatform('AmazonCs');
+  pending.resolve(); await old;
+  assert.equal(c.state.platform, 'AmazonCs');
+  assert.equal(c.state.view, 'setup');
+  assert.equal(c.state.current, null);
+  assert.deepEqual(renders(c), []);
+});
+
+test('Cross-platform applyPlatform during a pending open:false request keeps setup', async () => {
+  const c = context(), pending = gate(), entered = gate();
+  c.routes.set('/api/feishu/sources', async () => {
+    entered.resolve(); await pending.promise;
+    return { json: async () => ({ sources: [] }) };
+  });
+  const old = c.openAftersaleOverview('AmazonCs', { open: false });
+  await entered.promise;
+  c.applyPlatform('WayfairCs');
+  pending.resolve(); await old;
+  assert.equal(c.state.platform, 'WayfairCs');
+  assert.equal(c.state.view, 'setup');
+  assert.equal(c.state.current, null);
+  assert.deepEqual(renders(c), []);
+});
+
+test('A pending open:false request does not POST after platform navigation', async () => {
+  const c = context(), pending = gate(), entered = gate();
+  c.routes.set('/api/feishu/sources', async () => {
+    entered.resolve(); await pending.promise;
+    return { json: async () => ({ sources: [{ id: 'AMAZON_SOURCE', platform: 'AmazonCs', auto_sync: true, last_sync_at: 0 }] }) };
+  });
+  c.routes.set('/api/feishu/sources/AMAZON_SOURCE/sync', async () => ({}));
+  const old = c.openAftersaleOverview('AmazonCs', { open: false });
+  await entered.promise;
+  c.applyPlatform('WayfairCs');
+  pending.resolve(); await old;
+  assert.equal(c.effects.filter(e => e.method === 'POST').length, 0);
+  assert.equal(c.state.platform, 'WayfairCs');
+  assert.equal(c.state.view, 'setup');
+});
+
+test('Parent aftersale group tab still triggers due source sync but stays in setup', async () => {
+  const c = context();
+  c.state.group = '产品VOC';
+  c.state.platform = 'Amazon';
+  c.state.sources = [{ id: 'AMAZON_SOURCE', platform: 'AmazonCs', auto_sync: true,
+    interval_min: 1440, last_sync_at: Date.now() / 1000 - 2 * 86400 }];
+  c.routes.set('/api/feishu/sources/AMAZON_SOURCE/sync', async () => ({}));
+  c.renderPlatformGroups();
+  c.$$('#platformGroups button').find(b => b.dataset.g === '售后VOC').onclick();
+  await Promise.all(c.overviews);
+  assert.equal(c.overviews.length, 1);
+  assert.deepEqual(c.effects.filter(e => e.method === 'POST').map(e => e.path),
+    ['/api/feishu/sources/AMAZON_SOURCE/sync']);
+  assert.equal(c.effects.find(e => e.method === 'POST').body, '{}');
+  assert.equal(c.effects.filter(e => e.path === '/api/datasets').length, 2);
+  assert.equal(c.state.view, 'setup');
+  assert.equal(c.state.current, null);
+  assert.deepEqual(renders(c), []);
+});
+
+for (const kind of ['parent', 'child']) {
+  test(`${kind} tab preserves files and setup input values through a pending sync`, async () => {
+    const c = context(), pending = gate(), entered = gate();
+    const pid = kind === 'parent' ? 'AmazonCs' : 'WayfairCs';
+    const file = new File(['sku,qty\nA,1\n'], 'pending.csv', { type: 'text/csv' });
+    const files = [file];
+    c.state.files = files;
+    c.$('#fsUrl').value = 'draft sheet URL';
+    c.$('#fsName').value = 'draft source name';
+    c.$('#fsInterval').value = '1440';
+    c.$('#fName').value = 'draft analysis name';
+    c.state.sources = [{ id: 'SOURCE', platform: pid, auto_sync: true, last_sync_at: 0 }];
+    c.routes.set('/api/feishu/sources/SOURCE/sync', async () => {
+      entered.resolve(); await pending.promise;
+      return {};
+    });
+    if (kind === 'parent') {
+      c.state.group = '产品VOC';
+      c.renderPlatformGroups();
+      c.$$('#platformGroups button').find(b => b.dataset.g === '售后VOC').onclick();
+    } else {
+      c.renderPlatformTabs();
+      c.$$('#platformTabs button').find(b => b.dataset.p === pid).onclick();
+    }
+    await entered.promise;
+    assert.equal(c.state.files, files);
+    assert.equal(c.$('#fsUrl').value, 'draft sheet URL');
+    assert.equal(c.$('#fsName').value, 'draft source name');
+    assert.equal(c.$('#fsInterval').value, '1440');
+    assert.equal(c.$('#fName').value, 'draft analysis name');
+    c.$('#fsUrl').value = 'edited sheet URL';
+    c.$('#fsName').value = 'edited source name';
+    pending.resolve();
+    await Promise.all(c.overviews);
+    assert.equal(c.state.files, files);
+    assert.equal(c.state.files.length, 1);
+    assert.equal(c.state.files[0], file);
+    assert.equal(c.$('#fsUrl').value, 'edited sheet URL');
+    assert.equal(c.$('#fsName').value, 'edited source name');
+    assert.equal(c.$('#fsInterval').value, '1440');
+    assert.equal(c.$('#fName').value, 'draft analysis name');
+    assert.equal(c.state.platform, pid);
+    assert.equal(c.state.view, 'setup');
+    assert.deepEqual(renders(c), []);
+  });
+}
 (async () => {
   const results = [];
   for (const t of tests) {
