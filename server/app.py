@@ -21,6 +21,7 @@ import threading
 import time
 import traceback
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (FileResponse, JSONResponse, PlainTextResponse, Response,
@@ -31,8 +32,10 @@ from starlette.background import BackgroundTask
 
 from . import auth, llm, pipeline, aftersale as aftersale_module, feishu as feishu_module
 from . import eccang as eccang_module
-from . import eccang_sales
+from . import eccang_sales, feishu_sales, sales_schedule
 from . import shop_filter
+from .aftersale_rates import report_rate, combine_rates
+from .aftersale_teams import combine_team_reports
 from . import feishu_sources as fsources
 from .paths import config_path, ensure_dirs, web_dir
 from .store import Store, _LOCK as _STORE_LOCK
@@ -49,7 +52,29 @@ RUNS = _PATHS["runs"]
 DATA = _PATHS["demo"]
 
 store = Store(RUNS)
-app = FastAPI(title="VOC 洞察平台", version="1.0")
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # No scheduler or credentials are installed by this patch. This loop only acts
+    # when an administrator has explicitly enabled the monthly sales setting.
+    stop = threading.Event()
+    def monthly_sales():
+        while not stop.is_set():
+            try:
+                sales_schedule.tick(BASE)
+            except Exception:
+                pass  # The next tick retries; no credentials enter service logs.
+            stop.wait(60)
+    worker = threading.Thread(target=monthly_sales, daemon=True)
+    worker.start()
+    try:
+        yield
+    finally:
+        stop.set()
+
+
+app = FastAPI(title="VOC 洞察平台", version="1.0", lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
 # 鉴权
@@ -525,6 +550,10 @@ def _run_aftersale_job(did: str, files: list[str], platform: str, category: str,
     try:
         store.update(did, status="running", progress=2, message="开始售后分析…", error="")
         out = store.dataset_dir(did)
+        settings = feishu_sales.load_settings(BASE)
+        if settings.get("url") and settings.get("platform") == platform:
+            # Read failures invalidate the denominator; the ledger still renders.
+            feishu_sales.sync(BASE)
         result = aftersale_module.run_aftersale(
             files=[Path(f) for f in files],
             platform=platform,
@@ -535,7 +564,7 @@ def _run_aftersale_job(did: str, files: list[str], platform: str, category: str,
         )
         _a = result["aftersale"]
         _rate = _a.get("overall_rate")
-        if _a.get("rate_basis") == "eccang_qty" and _rate is not None:
+        if _a.get("rate_basis") in ("eccang_qty", "feishu_qty") and _rate is not None:
             _msg = (f"完成 · {_a['total_orders']} 条售后 / 销量 "
                     f"{(_a.get('sales') or {}).get('qty_used', 0)} 件 · 售后率 {_rate:.1%}"
                     f" · {result['elapsed_sec']}s")
@@ -577,9 +606,10 @@ def api_aftersale_summary():
     用于售后VOC 父板块的总览看板（数据来自所有 aftersale 类型且已完成的报告）。
     """
     roll = {"platforms": {}, "products": {}, "reasons": {}, "categories": {}, "shops": {}}
-    modes: list[str] = []
-    bases: list[str] = []
-    qty_by_platform: dict[str, int] = {}
+    rate_parts: list[dict] = []
+    platform_rates: dict[str, list[dict]] = {}
+    product_rates: dict[str, list[dict]] = {}
+    amazon_reports: list[dict] = []
     with _STORE_LOCK:
         recs = [d for d in store._data["datasets"]
                 if d.get("platform") in AFTERSALE_PLATFORMS and d.get("status") == "done"]
@@ -595,10 +625,11 @@ def api_aftersale_summary():
         a = r.get("aftersale")
         if not a:
             continue
-        modes.append(a.get("mode", "detail"))
-        bases.append(a.get("rate_basis") or ("detail" if a.get("mode") == "detail" else "none"))
-        qty_by_platform[p] = qty_by_platform.get(p, 0) + int(
-            (a.get("sales") or {}).get("qty_used") or 0)
+        if p == "AmazonCs":
+            amazon_reports.append(a)
+        rate = report_rate(a)
+        rate_parts.append(rate)
+        platform_rates.setdefault(p, []).append(rate)
         pf = roll["platforms"].setdefault(p, {"platform": p, "total": 0, "aftersale": 0})
         pf["total"] += a["total_orders"]
         pf["aftersale"] += a["aftersale_orders"]
@@ -608,6 +639,7 @@ def api_aftersale_summary():
                 "platform": p, "product": pr["product"], "total": 0, "aftersale": 0})
             bucket["total"] += pr["total"]
             bucket["aftersale"] += pr["aftersale"]
+            product_rates.setdefault(key, []).append(report_rate(a, pr))
         for rs in a["reasons"]:
             roll["reasons"][rs["reason"]] = roll["reasons"].get(rs["reason"], 0) + rs["count"]
         for cg in a.get("categories") or []:
@@ -619,25 +651,18 @@ def api_aftersale_summary():
             bucket["records"] += sh.get("records", 0)
             bucket["aftersale"] += sh.get("aftersale", 0)
 
-    # 台账模式若已从易仓拿到销量分母，就用「售后事件 ÷ 销量件数」算真售后率；
-    # 否则按原逻辑：只要混有台账数据就不给率，避免口径不一致。
-    external = bool(bases) and all(b == "eccang_qty" for b in bases)
-    ledger = ("ledger" in modes) and not external
-    overall_mode = "eccang_qty" if external else ("ledger" if ledger else "detail")
+    bases = {r["basis"] for r in rate_parts}
+    overall_mode = (next(iter(bases)) if bases in ({"eccang_qty"}, {"feishu_qty"}) else
+                    "detail" if not bases or bases == {"detail"} else "ledger")
 
-    def _rate(b, qty: int = 0):
-        if external and qty:
-            b["rate"] = round(b["aftersale"] / qty, 4)
-        elif b["total"] and not ledger:
-            b["rate"] = round(b["aftersale"] / b["total"], 4)
-        else:
-            b["rate"] = None
+    def _rate(b, parts):
+        b.update(combine_rates(parts))
         return b
 
-    platforms = sorted((_rate(v, qty_by_platform.get(v["platform"], 0))
+    platforms = sorted((_rate(v, platform_rates[v["platform"]])
                         for v in roll["platforms"].values()),
                        key=lambda x: (-(x["rate"] or 0), -x["total"]))
-    products = sorted((_rate(v) for v in roll["products"].values()),
+    products = sorted((_rate(v, product_rates[k]) for k, v in roll["products"].items()),
                      key=lambda x: (x["platform"], -(x["rate"] or 0), -x["total"]))
     rsum = sum(roll["reasons"].values()) or 1
     reasons = sorted(({"reason": k, "count": v, "pct": round(v / rsum, 4)}
@@ -651,19 +676,19 @@ def api_aftersale_summary():
                    key=lambda x: (x["platform"], -x["records"]))
     tot = sum(p["total"] for p in platforms)
     aft = sum(p["aftersale"] for p in platforms)
+    overall_rate = combine_rates(rate_parts)
     return {
         "platforms": platforms,
         "products": products,
         "reasons": reasons,
         "categories": categories,
         "shops": shops,
+        "teams": combine_team_reports(amazon_reports),
         "mode": overall_mode,
+        "rate_warning": overall_rate["rate_warning"],
         "overall": {
             "total": tot, "aftersale": aft,
-            "sales_qty": sum(qty_by_platform.values()),
-            "rate": (round(aft / sum(qty_by_platform.values()), 4)
-                     if (external and sum(qty_by_platform.values()))
-                     else (round(aft / tot, 4) if (tot and not ledger) else None)),
+            **overall_rate,
         },
         "datasets": len(recs),
     }
@@ -819,6 +844,38 @@ class EccangConfigReq(BaseModel):
     service_id: str = ""
 
 
+class FeishuSalesReq(BaseModel):
+    url: str = ""
+    platform: str = "AmazonCs"
+    write_back: bool = False
+    auto_sync: bool = False
+
+
+@app.get("/api/feishu/sales")
+def api_feishu_sales():
+    return {**feishu_sales.status(BASE), "schedule": sales_schedule.status(BASE)}
+
+
+@app.put("/api/feishu/sales")
+def api_feishu_sales_save(req: FeishuSalesReq):
+    if req.platform not in AFTERSALE_PLATFORMS:
+        raise HTTPException(400, jsonable_error("请选择售后平台。"))
+    if req.write_back and req.platform != "AmazonCs":
+        raise HTTPException(400, jsonable_error("现有易仓同步仅支持 Amazon 店铺。"))
+    if req.auto_sync and not req.write_back:
+        raise HTTPException(400, jsonable_error("每月自动同步需同时启用易仓写表。"))
+    try:
+        feishu_sales.save_settings(BASE, **req.model_dump())
+    except (ValueError, feishu_module.FeishuError) as e:
+        raise HTTPException(400, jsonable_error(_public_error(e)))
+    return {"ok": True, **api_feishu_sales()}
+
+
+@app.post("/api/feishu/sales/sync")
+def api_feishu_sales_sync():
+    return feishu_sales.sync(BASE)
+
+
 @app.get("/api/eccang/sales")
 def api_eccang_sales():
     """销量缓存状态：是否已配置凭证、上次同步时间、覆盖月份、销量件数、同步进度。"""
@@ -849,9 +906,14 @@ def api_eccang_config_save(req: EccangConfigReq):
     return {"ok": True, "configured": True, "source": cfg.get("source", "")}
 
 
-def _maybe_sync_sales(max_age_hours: int = 20) -> None:
+def _maybe_sync_sales(max_age_hours: int = 20, *, platform: str = "AmazonCs") -> None:
     """飞书每日同步时顺带刷新销量分母（后台执行，不阻塞本次同步）。"""
     try:
+        # A configured Feishu denominator is authoritative. Eccang writeback is
+        # manual or monthly; importing a ledger must not start an ERP request.
+        sales_settings = feishu_sales.load_settings(BASE)
+        if sales_settings.get("url") and sales_settings.get("platform") == platform:
+            return
         st = eccang_sales.status(BASE)
         if not st.get("configured") or (st.get("sync") or {}).get("running"):
             return
@@ -914,7 +976,7 @@ def _sync_source(src: dict, app_id: str = "", app_secret: str = "") -> dict:
         return {"ok": False, "message": "未配置表格链接", "dataset_id": ""}
 
     # 每天刷新一次易仓销量分母（后台线程，不阻塞飞书同步）
-    _maybe_sync_sales()
+    _maybe_sync_sales(platform=platform)
 
     aid, sec, _ = _feishu_creds(app_id, app_secret)
     if not aid or not sec:

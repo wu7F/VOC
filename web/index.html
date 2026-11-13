@@ -114,6 +114,21 @@
           </div>
 
           <div id="fsSourceList" class="fs-srclist"></div>
+          <details class="fs-creds">
+            <summary>销量表（售后率分母）</summary>
+            <label class="field"><span>飞书电子表格工作表链接</span>
+              <input type="text" id="fsSalesUrl" class="fs-input" placeholder="粘贴包含 sheet= 的工作表链接；留空停用">
+            </label>
+            <label class="field"><span>销量所属平台</span><select id="fsSalesPlatform"><option value="AmazonCs">Amazon 售后</option><option value="WayfairCs">Wayfair 售后</option></select></label>
+            <p>第一行依次为：店铺、SKU、日期、销量件数。销量表用于所选平台；表中没有的店铺保持无率。</p>
+            <label><input type="checkbox" id="fsSalesWrite"> 易仓同步完成后覆盖写入（Amazon 售后）</label>
+            <label><input type="checkbox" id="fsSalesAuto"> 每月自动同步易仓并写表（服务需持续运行）</label>
+            <div class="fs-src-acts">
+              <button class="btn-ghost" id="btnFsSalesSave">保存销量表</button>
+              <button class="btn-ghost" id="btnFsSalesRead">读取销量表</button>
+            </div>
+            <p id="fsSalesState" role="status"></p>
+          </details>
 
           <div class="fs-row">
             <input type="text" id="fsUrl" class="fs-input"
@@ -409,6 +424,7 @@
     </div>
     <div class="modal-body" id="asModalBody">
       <div class="as-kpis" id="asSumKpis"></div>
+      <div id="asSumTeams"></div>
       <div class="as-grid">
         <div class="as-card">
           <h3 id="asSumRateTitle">各平台 · 各产品售后分布</h3>

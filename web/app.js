@@ -44,6 +44,7 @@ const state = {
   current: null,     // 当前数据集记录
   result: null,      // 当前结果 JSON
   reportMd: '',
+  viewRequest: 0,    // 导航请求代次；切换平台或打开另一报告后，旧异步响应失效
   tab: 'overview',
   files: [],         // 待上传文件
   charts: {},        // elId -> echarts instance
@@ -545,7 +546,8 @@ function applyGroup(g) {
 async function openAftersaleOverview(pid) {
   // 目标平台：优先用传入的（点子标签时），否则用当前平台
   const want = pid || state.platform;
-  const asPids = state.platforms.filter(p => p.kind === 'aftersale').map(p => p.id);
+  const request = ++state.viewRequest;
+  const current = () => request === state.viewRequest && state.platform === want;
   const newest = arr => arr.slice().sort(
     (a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
@@ -553,15 +555,16 @@ async function openAftersaleOverview(pid) {
     // 0) 先刷新数据集列表 —— 否则 state.datasets 可能是旧的/空的，
     //    就会出现"明明左侧有报告，主区域却是新建分析表单"
     await loadDatasets();
+    if (!current()) return;
 
     // 1) 飞书数据源：到期则先同步（同步失败不影响后面打开已有报告）
     let src = null;
     try {
       const fs = await (await api('/api/feishu/sources')).json();
+      if (!current()) return;
       state.feishuSources = fs.sources || [];
       state.feishuCred = fs;
-      src = state.feishuSources.find(s => s.platform === want)
-         || state.feishuSources.find(s => s.platform !== 'WayfairCs');
+      src = state.feishuSources.find(s => s.platform === want);
       if (src && src.auto_sync !== false) {
         const last = src.last_sync_at ? (Date.now() / 1000 - src.last_sync_at) / 60 : 1e9;
         if (last > (src.interval_min || 30)) {
@@ -569,10 +572,13 @@ async function openAftersaleOverview(pid) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
           });
+          if (!current()) return;
           await loadDatasets();
+          if (!current()) return;
         }
       }
     } catch (e) { /* 取源/同步失败：继续用已有报告，不要因此停在表单页 */ }
+    if (!current()) return;
 
     // 2) 该平台最新一份已完成报告
     let d = newest(state.datasets.filter(x => x.status === 'done' && x.platform === want))[0];
@@ -585,10 +591,11 @@ async function openAftersaleOverview(pid) {
     // 没有该平台数据就老老实实显示空态。
 
     if (d && d.id) {
-      try { await openDataset(d.id); return; } catch (e) { /* 落到空态 */ }
+      try { await openDataset(d.id, request); return; } catch (e) { /* 落到空态 */ }
     }
 
     // 5) 真的没有数据 → 空态引导（只留飞书源配置）
+    if (!current()) return;
     showView('setup');
     const card = $('#cardFeishu');
     if (card) card.hidden = false;
@@ -596,7 +603,7 @@ async function openAftersaleOverview(pid) {
     if (note) note.textContent =
       '还没有售后数据。配置一个飞书表格数据源，之后看板会随表格自动更新，无需再上传文件。';
   } catch (e) {
-    showView('setup');
+    if (current()) showView('setup');
   }
 }
 
@@ -609,6 +616,7 @@ function syncGroupFromPlatform() {
 }
 
 function applyPlatform(pid) {
+  state.viewRequest++;
   state.platform = pid;
   state.recScope = 'platform';      // 切换平台板块时，报告记录自动跟随到该平台
   state.dsFilter = 'all';
@@ -1553,6 +1561,49 @@ function bindFeishuUI() {
   }
   fsLoadCredState();
   fsRenderSources();
+  fsLoadSales();
+  $('#btnFsSalesSave').onclick = fsSaveSales;
+  $('#btnFsSalesRead').onclick = fsReadSales;
+}
+
+async function fsLoadSales() {
+  const el = $('#fsSalesState');
+  if (!el) return;
+  try {
+    const st = await (await api('/api/feishu/sales')).json();
+    const cfg = st.settings || {};
+    $('#fsSalesUrl').value = cfg.url || '';
+    $('#fsSalesPlatform').value = cfg.platform || 'AmazonCs';
+    $('#fsSalesWrite').checked = !!cfg.write_back;
+    $('#fsSalesAuto').checked = !!cfg.auto_sync;
+    el.textContent = st.error || (st.complete ? `销量表已读取：${st.units || 0} 件；重新分析后看板生效。` : '销量表尚未完整读取。');
+  } catch (e) { el.textContent = '销量表状态读取失败。'; }
+}
+
+async function fsSaveSales() {
+  const el = $('#fsSalesState');
+  try {
+    const response = await api('/api/feishu/sales', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: $('#fsSalesUrl').value.trim(),
+        platform: $('#fsSalesPlatform').value, write_back: $('#fsSalesWrite').checked,
+        auto_sync: $('#fsSalesAuto').checked })
+    });
+    if (!response.ok) throw new Error((await parseLoginError(response)).msg || '保存失败');
+    el.textContent = '销量表设置已保存；读取后重新分析可刷新看板。';
+  } catch (e) { el.textContent = e.message; }
+}
+
+async function fsReadSales() {
+  const el = $('#fsSalesState');
+  const btn = $('#btnFsSalesRead');
+  btn.disabled = true;
+  el.textContent = '正在读取已保存的销量表…';
+  try {
+    const st = await fsPost('/api/feishu/sales/sync', {});
+    el.textContent = st.error || (st.complete ? `已读取 ${st.units || 0} 件；重新分析后看板生效。` : '销量表读取未完成。');
+  } catch (e) { el.textContent = e.message; }
+  finally { btn.disabled = false; }
 }
 
 async function fsSaveCred() {
@@ -1659,7 +1710,9 @@ async function fsStart() {
 }
 
 /* ============================ 进度 ============================ */
-function watchJob(id) {
+function watchJob(id, request = ++state.viewRequest) {
+  const current = () => request === state.viewRequest;
+  if (!current()) return;
   showView('progress');
   $('#progTitle').textContent = '正在分析…';
   $('#progFill').style.width = '0%';
@@ -1668,6 +1721,7 @@ function watchJob(id) {
 
   const es = new EventSource(`/api/datasets/${id}/events`);
   es.onmessage = (ev) => {
+    if (!current()) { es.close(); return; }
     const d = JSON.parse(ev.data);
     $('#progFill').style.width = d.progress + '%';
     $('#progMsg').textContent = d.message || '';
@@ -1676,7 +1730,7 @@ function watchJob(id) {
       es.close();
       $('#progTitle').textContent = '分析完成';
       state.files = []; renderFileList(); updateStartState();   // 成功后才清空待上传列表
-      loadDatasets().then(() => openDataset(id));
+      loadDatasets().then(() => { if (current()) openDataset(id, request); });
     } else if (d.status === 'error') {
       es.close();
       showView('setup');
@@ -1687,7 +1741,7 @@ function watchJob(id) {
       loadDatasets();
     }
   };
-  es.onerror = () => { es.close(); loadDatasets(); };
+  es.onerror = () => { es.close(); if (current()) loadDatasets(); };
 }
 
 /* ============================ 结果 ============================ */
@@ -1722,8 +1776,18 @@ function bindResultEvents() {
   window.addEventListener('resize', debounce(resizeAllCharts, 160));
 }
 
-async function openDataset(id) {
+async function openDataset(id, request = ++state.viewRequest) {
+  const current = () => request === state.viewRequest;
+  if (!current()) return;
   const rec = await (await api(`/api/datasets/${id}`)).json();
+  if (!current()) return;
+  let result, reportMd;
+  if (rec.status !== 'running' && rec.status !== 'queued' && rec.status !== 'error') {
+    result = await (await api(`/api/datasets/${id}/result`)).json();
+    if (!current()) return;
+    reportMd = await (await api(`/api/datasets/${id}/report`)).text();
+    if (!current()) return;
+  }
   state.current = rec;
   state.platform = rec.platform;
   syncGroupFromPlatform();
@@ -1732,7 +1796,7 @@ async function openDataset(id) {
   renderDemos();
   renderDatasets();
 
-  if (rec.status === 'running' || rec.status === 'queued') { watchJob(id); return; }
+  if (rec.status === 'running' || rec.status === 'queued') { watchJob(id, request); return; }
   if (rec.status === 'error') {
     showView('setup');
     $('#runNote').className = 'run-note err';
@@ -1740,8 +1804,8 @@ async function openDataset(id) {
     showError(rec.error);
     return;
   }
-  state.result = await (await api(`/api/datasets/${id}/result`)).json();
-  state.reportMd = await (await api(`/api/datasets/${id}/report`)).text();
+  state.result = result;
+  state.reportMd = reportMd;
   state.tab = 'overview';
   // 必须先让结果视图可见再渲染 —— 否则图表容器尺寸为 0，ECharts 无法初始化
   showView('result');
@@ -1776,6 +1840,58 @@ function renderResult() {
   }, 60);
 }
 
+/** Team rates are exact backend aggregates; never reconstruct them from shop rates. */
+function renderAftersaleTeams(teams, { legacy = false } = {}) {
+  if (!Array.isArray(teams) || !teams.length) {
+    return legacy ? '<div class="as-note">亚马逊历史报告尚无 Team 汇总，请重新分析后查看。</div>' : '';
+  }
+  const rateText = value => value == null ? '—' : (value * 100).toFixed(1) + '%';
+  const qtyText = value => value == null ? '—' : esc(value);
+  const statusText = {
+    ok: '已匹配', missing: '缺少店铺销量', unavailable: '销量尚未确认',
+    excluded: '已被店铺名单排除', zero_sales: '销量为 0，暂不计算率',
+  };
+  const unmatched = [...new Set(teams.flatMap(team => team.unmatched_shops || []))];
+  const detailOnly = teams.every(team => team.rate_basis === 'detail');
+  return `<section class="as-teams" aria-label="亚马逊 Team 售后汇总">
+    <h3>亚马逊 Team 售后汇总</h3>
+    <p class="as-team-hint">${detailOnly ? '组内表内售后量合计 ÷ 表内订单合计。' : '组内有效售后量合计 ÷ 同期销量合计；缺少店铺销量时暂不计算 Team 售后率。'}不平均各店铺百分比。</p>
+    ${unmatched.length ? `<p class="as-team-warning">未归入 Team 的数据店名：${unmatched.map(esc).join('、')}</p>` : ''}
+    <div class="as-team-grid">${teams.map(team => {
+      const detail = team.rate_basis === 'detail';
+      const missing = team.missing_shops || [];
+      const excluded = team.excluded_shops || [];
+      const numerator = team.rate_numerator == null ? '—' : esc(team.rate_numerator);
+      const denominator = detail ? qtyText(team.records) : qtyText(team.sales_qty);
+      const source = detail ? '表内订单' : team.rate_basis === 'feishu_qty' ? '飞书销量表' :
+        team.rate_basis === 'eccang_qty' ? '易仓销量' : '销量';
+      return `<article class="as-card as-team-card">
+        <h4>${esc(team.team)}</h4>
+        <div class="as-team-rate">${rateText(team.rate)}</div>
+        <div class="as-team-hint">Team 售后率 · ${esc(source)}</div>
+        <p class="as-team-count">售后登记 ${qtyText(team.aftersale)} 条 · 计入率 ${numerator} 条 / ${detail ? '表内订单' : '销量'} ${denominator}${detail ? ' 单' : ' 件'}</p>
+        <p class="as-team-members">${(team.members || []).map(esc).join(' · ')}</p>
+        ${missing.length ? `<p class="as-team-warning">${team.rate_basis === 'feishu_qty' ? '飞书销量表缺少店铺' : '缺少店铺销量'}：${missing.map(esc).join('、')}</p>` : ''}
+        ${excluded.length ? `<p class="as-team-warning">店铺名单已排除：${excluded.map(esc).join('、')}</p>` : ''}
+        ${team.rate_warning ? `<p class="as-team-warning">${esc(team.rate_warning)}</p>` : ''}
+        <details class="as-team-details"><summary>查看组内店铺明细</summary>
+          <div class="as-team-table-wrap"><table class="as-table">
+            <thead><tr><th>店铺账号 / 数据名称</th><th>售后登记</th><th>${detail ? '表内订单' : '销量件数'}</th><th>售后率</th><th>状态</th></tr></thead>
+            <tbody>${(team.shops || []).map(shop => {
+              const available = shop.status === 'ok' || shop.status === 'zero_sales';
+              const salesQty = detail ? shop.records : shop.sales_qty;
+              return `<tr><td><b>${esc(shop.account)}</b>${(shop.shop_names || []).length ? `<div class="as-team-hint">${shop.shop_names.map(esc).join('、')}</div>` : ''}</td>
+                <td>${qtyText(shop.aftersale)}</td><td>${available ? qtyText(salesQty) : '—'}</td>
+                <td>${available ? rateText(shop.rate) : '—'}</td>
+                <td${available ? '' : ' class="as-team-warning"'}>${esc(statusText[shop.status] || '暂不可用')}</td></tr>`;
+            }).join('')}</tbody>
+          </table></div>
+        </details>
+      </article>`;
+    }).join('')}</div>
+  </section>`;
+}
+
 function renderAftersale() {
   const r = state.result, c = state.current;
   $('#resTitle').textContent = `${r.platform} · 售后分析`;
@@ -1783,7 +1899,7 @@ function renderAftersale() {
   const plat = state.platforms.find(x => x.id === r.platform) || {};
   const color = plat.color || '#FF7A00';
   const ledger = a.mode === 'ledger';
-  const hasRate = a.rate_basis === 'eccang_qty' && a.overall_rate != null;
+  const hasRate = ['eccang_qty', 'feishu_qty'].includes(a.rate_basis) && a.overall_rate != null;
   const cats = a.categories || [];
   const shops = a.shops || [];
   const sales = a.sales || {};
@@ -1814,6 +1930,7 @@ function renderAftersale() {
       <div class="as-kpi"><div class="as-kpi-v">${a.products.length}</div><div class="as-kpi-l">产品族</div></div>
       ${mergedSkus ? `<div class="as-kpi"><div class="as-kpi-v">${mergedSkus}</div><div class="as-kpi-l">合并的相似 SKU</div></div>` : ''}
     </div>
+    ${r.platform === 'AmazonCs' ? renderAftersaleTeams(a.teams, { legacy: true }) : ''}
     ${shops.length ? `
     <div class="as-card">
       <h3>各店铺售后 <em class="as-hint">点一张卡片看该店的产品明细</em>
@@ -1827,7 +1944,7 @@ function renderAftersale() {
           const mainNum = hasRate ? rTxt : s.aftersale;
           const mainUnit = hasRate ? '' : '<em>条</em>';
           const subTxt = hasRate
-            ? `${s.aftersale} 条售后 / 销量 ${s.sales_qty || 0} 件 · ${s.product_count} 个产品`
+            ? `${s.aftersale} 条售后 / 销量 ${s.rate == null ? '—（缺分母）' : s.sales_qty} 件 · ${s.product_count} 个产品`
             : `${s.product_count} 个产品 · ${esc(s.top_category || '—')}`;
           const barW = hasRate
             ? Math.min(100, (s.rate || 0) * 100).toFixed(1)
@@ -1857,13 +1974,13 @@ function renderAftersale() {
     </div>
     <div class="as-card" id="asProdWrap"></div>
     ${hasRate ? `<div class="as-note">
-      <b>售后率口径</b>：当月售后事件数 ÷ 易仓同店同月<b>销量件数</b>（自然月）。
+      <b>售后率口径</b>：当月售后事件数 ÷ ${a.rate_basis === 'feishu_qty' ? '飞书销量表' : '易仓'}同店同月<b>销量件数</b>（自然月）。
       分母覆盖 ${esc((sales.months || []).join('、') || '—')}，
       订单号精确匹配 <b>${sales.matched_orders || 0}</b> 条、未匹配 <b>${sales.unmatched_orders || 0}</b> 条；
       缺日期 ${sales.no_month || 0} 条、该月无销量 ${sales.no_denom || 0} 条不计入率。
       ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
     </div>` : (ledger ? `<div class="as-note">
-      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，尚未同步易仓销量数据，
+      <b>台账口径</b>：本表只登记了<b>已发生售后</b>的记录，尚未取到完整销量数据，
       因此<b>暂不计算售后率</b>，展示的是售后<b>登记量</b>与各店铺/产品的分布。
       ${a.filtered_out ? `已剔除明确标记为非售后的记录 <b>${a.filtered_out}</b> 条。` : ''}
     </div>` : '')}`;
@@ -2015,6 +2132,12 @@ async function renderAsFresh() {
     src = state.feishuSources.find(s => s.dataset_id === cid);
   } catch (e) { /* 取源失败：继续显示销量状态 */ }
   try { sales = await (await api('/api/eccang/sales')).json(); } catch (e) { sales = null; }
+  try {
+    const table = await (await api('/api/feishu/sales')).json();
+    if ((table.settings || {}).url && (table.settings || {}).platform === (state.result || {}).platform) {
+      sales = { ...table, feishu: true };
+    }
+  } catch (e) { /* 报告仍展示已保存的分母来源 */ }
   if (!src) { el.hidden = true; return; }
 
   const fmt = t => t
@@ -2035,7 +2158,9 @@ async function renderAsFresh() {
   const needResume = !running && pending > 0 && doneN > 0;
   let salesTxt = '';
   if (sales) {
-    if (!sales.configured) {
+    if (sales.feishu) {
+      salesTxt = `<span class="fr-sep">·</span><span class="fr-wl" id="asSalesTxt">${sales.complete ? `飞书销量 ${sales.units || 0} 件 · ${esc(fmt(sales.synced_at))}` : '飞书销量未完整读取，暂不计算率'}${sales.error ? ` · ${esc(sales.error)}` : ''}</span>`;
+    } else if (!sales.configured) {
       salesTxt = `<span class="fr-sep">·</span><span class="fr-wl" id="asSalesTxt">易仓销量未配置（暂按登记量展示）</span>`;
     } else if (running) {
       const stall = (sy.stalled_sec || 0) > 120 ? ' · ⚠ 超过 2 分钟无响应' : '';
@@ -2058,8 +2183,8 @@ async function renderAsFresh() {
     ${wlTxt}
     ${salesTxt}
     ${errTip}
-    ${sales && !sales.configured ? `<button class="btn-ghost fr-btn" id="asEcConfig">配置销量数据源</button>` : ''}
-    ${sales && sales.configured ? `<button class="btn-ghost fr-btn" id="asSyncSales" data-mode="${running ? 'cancel' : 'sync'}">${running ? '中止同步' : (needResume ? `继续同步（还剩 ${pending} 店）` : '更新销量')}</button>` : ''}
+    ${sales && !sales.feishu && !sales.configured ? `<button class="btn-ghost fr-btn" id="asEcConfig">配置销量数据源</button>` : ''}
+    ${sales && sales.configured ? `<button class="btn-ghost fr-btn" id="asSyncSales" data-mode="${running ? 'cancel' : 'sync'}">${sales.feishu ? '读取销量表' : running ? '中止同步' : (needResume ? `继续同步（还剩 ${pending} 店）` : '更新销量')}</button>` : ''}
     <button class="btn-ghost fr-btn" id="asSyncNow">立即更新</button>`;
   const cfgBtn = $('#asEcConfig');
   if (cfgBtn) cfgBtn.onclick = async () => {
@@ -2096,7 +2221,11 @@ async function renderAsFresh() {
     const old = sb.textContent;
     sb.textContent = mode === 'cancel' ? '中止中…' : '启动中…';
     try {
-      if (mode === 'cancel') {
+      if (sales.feishu) {
+        await fsPost('/api/feishu/sales/sync', {});
+        await fsPost(`/api/feishu/sources/${src.id}/sync`, {});
+        if (src.dataset_id) await openDataset(src.dataset_id);
+      } else if (mode === 'cancel') {
         await api('/api/eccang/sales/cancel', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
         });
@@ -2135,7 +2264,7 @@ function renderAsProducts(a, shop) {
   const wrap = $('#asProdWrap');
   if (!wrap) return;
   const ledger = a.mode === 'ledger';
-  const hasRate = a.rate_basis === 'eccang_qty' && a.overall_rate != null;
+  const hasRate = ['eccang_qty', 'feishu_qty'].includes(a.rate_basis) && a.overall_rate != null;
   const s = (a.shops || []).find(x => x.shop === shop);
   const rateCell = v => (v == null) ? '—' : (v * 100).toFixed(1) + '%';
   const rateBar = v => (v == null) ? '' :
@@ -2220,10 +2349,10 @@ function renderAsCharts(a, color) {
     const top = a.products.slice(0, 15);
     if (a.shops && a.shops.length) {
       // 有店铺维度时，左图优先画店铺：有销量分母就画售后率，否则画登记占比
-      const hasRate = a.rate_basis === 'eccang_qty' && a.overall_rate != null;
+      const hasRate = ['eccang_qty', 'feishu_qty'].includes(a.rate_basis) && a.overall_rate != null;
       const ssRev = a.shops.slice(0, 15).reverse();
       const vals = ssRev.map(s => hasRate
-        ? (s.rate == null ? 0 : s.rate)
+        ? (s.rate == null ? null : s.rate)
         : s.aftersale / (a.aftersale_orders || 1));
       const maxV = Math.max(0.05, ...vals) * 1.15;
       chart.setOption({
@@ -2233,7 +2362,7 @@ function renderAsCharts(a, color) {
           formatter: p => {
             const s = ssRev[p[0].dataIndex] || {};
             return hasRate
-              ? `${p[0].name}<br/>售后率 ${(p[0].value * 100).toFixed(1)}%<br/>售后 ${s.aftersale || 0} 条 / 销量 ${s.sales_qty || 0} 件`
+              ? `${esc(p[0].name)}<br/>售后率 ${s.rate == null ? '—（缺销量分母）' : (s.rate * 100).toFixed(1) + '%'}<br/>售后 ${s.aftersale || 0} 条 / 销量 ${s.rate == null ? '—（缺分母）' : s.sales_qty} 件`
               : `${p[0].name}<br/>售后登记 ${s.aftersale || 0} 条（${(p[0].value * 100).toFixed(1)}%）`;
           }
         },
@@ -2246,7 +2375,7 @@ function renderAsCharts(a, color) {
         series: [{
           type: 'bar', data: vals,
           itemStyle: { color: color },
-          label: { show: true, position: 'right', formatter: p => (p.value * 100).toFixed(1) + '%' }
+          label: { show: true, position: 'right', formatter: p => p.value == null ? '—' : (p.value * 100).toFixed(1) + '%' }
         }]
       });
     } else if (ledger) {
@@ -2355,9 +2484,13 @@ async function openAftersaleSummary() {
 function renderAftersaleSummary(d) {
   const body = $('#asModalBody');
   body.classList.remove('loading');
+  const teamWrap = $('#asSumTeams');
+  if (teamWrap) teamWrap.innerHTML = renderAftersaleTeams(d.teams, {
+    legacy: (d.platforms || []).some(p => p.platform === 'AmazonCs') && !Array.isArray(d.teams),
+  });
   const ov = d.overall;
   const ledger = d.mode === 'ledger';
-  const rateMode = d.mode === 'eccang_qty';
+  const rateMode = ['eccang_qty', 'feishu_qty'].includes(d.mode);
   const hasRate = ov.rate != null;
   const rateTxt = hasRate ? (ov.rate * 100).toFixed(1) + '%' : '—';
   const cntLabel = (ledger || rateMode) ? '售后登记条数' : '总订单数';
