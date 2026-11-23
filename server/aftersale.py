@@ -220,15 +220,39 @@ _REASON_CATEGORIES = [
     ("要求换货", ["换货", "换一个", "换新的", "换一件"]),
 ]
 
+# 售后表原文主要为英文。下列为上述既有类别的明确同义词/短语，
+# 保持原有互斥顺序，不新增模型推断类别；原文只在内存匹配。
+_REASON_ENGLISH = [
+    ("破损损坏", ("damag", "broken", "crack", "scratch", "dent", "defect", "poorquality",
+                   "flimsy", "fellapart", "peel", "rust", "bent")),
+    ("尺寸规格", ("toosmall", "toolarge", "toobig", "wrongsize", "doesnotfit", "doesntfit",
+                   "notfit", "fitissue", "dimensions", "sizeissue", "sizing")),
+    ("缺件漏发", ("missing", "notincluded", "didntreceive", "notreceived", "noreceive",
+                   "partsmissing", "piecesmissing", "shortage", "incomplete", "withoutthe")),
+    ("功能故障", ("doesnotwork", "doesntwork", "notworking", "wontwork", "malfunction", "stuck",
+                   "wobbl", "unstable", "loose", "cannot", "cant", "unableto", "doesnotclose",
+                   "doesntclose", "wontclose", "hardtoclose", "hardtoopen", "broken", "failure")),
+    ("物流配送", ("shipping", "delivery", "delayed", "delay", "latearrival", "carrier", "package",
+                   "tracking", "delivered")),
+    ("安装使用", ("assembly", "assemble", "install", "instruction", "manual", "setup", "howtouse")),
+    ("要求退货", ("refund", "return", "cancel", "changedmymind", "dontneed", "nolongerneed", "unwanted")),
+    ("要求换货", ("exchange", "replacement", "replace", "sendanother")),
+]
+
 
 def _reason_category(text: str) -> str:
-    """把自由文本的售后原因归到大类。"""
+    """把原文归入既有原因大类；留空单独标注，不把未知内容猜成零。"""
     t = _norm(text)
     if not t:
         return "未注明原因"
     for name, kws in _REASON_CATEGORIES:
         for kw in kws:
             if kw in t:
+                return name
+    ascii_text = re.sub(r"[^a-z0-9]", "", str(text).lower())
+    for name, kws in _REASON_ENGLISH:
+        for kw in kws:
+            if kw in ascii_text:
                 return name
     return "其他问题"
 

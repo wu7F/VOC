@@ -34,6 +34,7 @@ from . import auth, llm, pipeline, aftersale as aftersale_module, feishu as feis
 from . import eccang as eccang_module
 from . import eccang_sales, feishu_sales, sales_schedule
 from . import shop_filter
+from . import bitable_board
 from .aftersale_rates import report_rate, combine_rates
 from .aftersale_teams import combine_team_reports
 from . import feishu_sources as fsources
@@ -327,6 +328,41 @@ def app_js():
 @app.get("/style.css")
 def style_css():
     return FileResponse(WEB / "style.css", media_type="text/css",
+                        headers={"Cache-Control": _nocache()})
+
+
+@app.get("/api/bitable/board")
+def api_bitable_board(refresh: int = 0):
+    """只读多维表格看板数据。凭证只用于服务端取数，不进入响应或日志。"""
+    app_id, app_secret, _src = _feishu_creds()
+    if not app_id or not app_secret:
+        return JSONResponse({
+            "ok": False,
+            "error": "未配置飞书应用凭证：请在飞书数据源配置里填写 app_id/app_secret，"
+                     "或设置 VOC_FEISHU_APP_ID / VOC_FEISHU_APP_SECRET。",
+            "last_success_at": None,
+            "stale": False,
+        })
+    return JSONResponse(bitable_board.get_board(app_id, app_secret, refresh=bool(refresh)))
+
+
+@app.get("/board")
+def board_page():
+    """独立只读看板页面，不复用现有 web/index.html。"""
+    p = WEB / "board.html"
+    if not p.exists():
+        raise HTTPException(404, "看板页不存在")
+    return FileResponse(p, media_type="text/html; charset=utf-8",
+                        headers={"Cache-Control": _nocache()})
+
+
+@app.get("/board.js")
+def board_js():
+    """看板前端逻辑，保持独立于现有 web/app.js。"""
+    p = WEB / "board.js"
+    if not p.exists():
+        raise HTTPException(404, "看板脚本不存在")
+    return FileResponse(p, media_type="application/javascript",
                         headers={"Cache-Control": _nocache()})
 
 

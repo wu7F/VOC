@@ -1,0 +1,4423 @@
+{
+  "schema_version": 1,
+  "source": {
+    "label": "Confirmed workbook snapshot",
+    "file": "numerator-vs-sales.xlsx",
+    "snapshot_date": "2026-11-20",
+    "coverage_start": "2026-04",
+    "coverage_end": "2026-11",
+    "realtime": false,
+    "refreshable": false
+  },
+  "business_rules": {
+    "t01_excluded_from_numerator_and_denominator": true,
+    "initial_song_canonical_store": "RUIBAO_US_US",
+    "heyiqin_excluded": true,
+    "after_sale_pairing": "one warehouse SKU per record, count 1",
+    "missing_future_store_month_zero_policy": "unresolved"
+  },
+  "team_totals": [
+    {
+      "team": "Team 1",
+      "numerator": 410,
+      "denominator": 4127,
+      "excluded_t01_sales": 151
+    },
+    {
+      "team": "Team 2",
+      "numerator": 291,
+      "denominator": 2194,
+      "excluded_t01_sales": 0
+    },
+    {
+      "team": "Team 3",
+      "numerator": 64,
+      "denominator": 867,
+      "excluded_t01_sales": 1
+    }
+  ],
+  "stores": [
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "numerator": 317,
+      "denominator": 3115
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "numerator": 4,
+      "denominator": 104
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "numerator": 89,
+      "denominator": 908
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "numerator": 226,
+      "denominator": 1552
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "numerator": 65,
+      "denominator": 642
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "numerator": 56,
+      "denominator": 762
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "numerator": 7,
+      "denominator": 100
+    }
+  ],
+  "store_month": [
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "numerator": 16,
+      "denominator": 112
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "numerator": 10,
+      "denominator": 201
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "numerator": 37,
+      "denominator": 731
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "numerator": 58,
+      "denominator": 414
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "numerator": 61,
+      "denominator": 490
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "numerator": 52,
+      "denominator": 537
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "numerator": 61,
+      "denominator": 389
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "numerator": 22,
+      "denominator": 241
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-06",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-07",
+      "numerator": 0,
+      "denominator": 31
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-08",
+      "numerator": 0,
+      "denominator": 33
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-09",
+      "numerator": 0,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-10",
+      "numerator": 4,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-11",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "numerator": 31,
+      "denominator": 565
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "numerator": 55,
+      "denominator": 329
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-06",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-07",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-08",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-09",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-10",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-11",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "numerator": 36,
+      "denominator": 319
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "numerator": 34,
+      "denominator": 278
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "numerator": 46,
+      "denominator": 414
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "numerator": 55,
+      "denominator": 306
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "numerator": 42,
+      "denominator": 220
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-09",
+      "numerator": 8,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-10",
+      "numerator": 5,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-04",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-07",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "numerator": 2,
+      "denominator": 79
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "numerator": 22,
+      "denominator": 280
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "numerator": 30,
+      "denominator": 195
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "numerator": 11,
+      "denominator": 85
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-06",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-09",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-10",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-11",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-05",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "numerator": 1,
+      "denominator": 34
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "numerator": 2,
+      "denominator": 37
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "numerator": 4,
+      "denominator": 30
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "numerator": 5,
+      "denominator": 82
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "numerator": 40,
+      "denominator": 311
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "numerator": 4,
+      "denominator": 258
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "numerator": 3,
+      "denominator": 35
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "numerator": 4,
+      "denominator": 63
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-06",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-07",
+      "numerator": 0,
+      "denominator": 1
+    }
+  ],
+  "sku_store_month": [
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 1,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BE",
+      "numerator": 5,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BR",
+      "numerator": 5,
+      "denominator": 64
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "YJXNE240457-BR",
+      "numerator": 2,
+      "denominator": 14
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-04",
+      "sku": "YJXNE240457-DG",
+      "numerator": 2,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "8045PK",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018BK-2L",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 1,
+      "denominator": 28
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 1,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 0,
+      "denominator": 19
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG01LG-3L",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 1,
+      "denominator": 28
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 1,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BR",
+      "numerator": 4,
+      "denominator": 36
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-BR",
+      "numerator": 1,
+      "denominator": 20
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "8045PK",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 2,
+      "denominator": 111
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 2,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZP8018DG-2L",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 5,
+      "denominator": 46
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG01LG-3L",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 48
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 48
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 6,
+      "denominator": 25
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 3,
+      "denominator": 63
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 15
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 2,
+      "denominator": 36
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 14
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 22
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 2,
+      "denominator": 14
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BR",
+      "numerator": 4,
+      "denominator": 163
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJMZR240426-BR",
+      "numerator": 3,
+      "denominator": 32
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJMZR240426-GR",
+      "numerator": 6,
+      "denominator": 34
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-06",
+      "sku": "YJXNE240457-BR",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 5,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 33
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 21
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 10,
+      "denominator": 28
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 7,
+      "denominator": 34
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 8,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 1,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 1,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 3,
+      "denominator": 24
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 4,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BR",
+      "numerator": 10,
+      "denominator": 71
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-LB",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJMZR240426-BR",
+      "numerator": 2,
+      "denominator": 45
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJMZR240426-GR",
+      "numerator": 2,
+      "denominator": 22
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 32
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-DG",
+      "numerator": 3,
+      "denominator": 25
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 3,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 4,
+      "denominator": 12
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 4,
+      "denominator": 38
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 9,
+      "denominator": 30
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 3,
+      "denominator": 38
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 4,
+      "denominator": 48
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 35
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 3,
+      "denominator": 25
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BR",
+      "numerator": 17,
+      "denominator": 148
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 13
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJMZR240426-BR",
+      "numerator": 3,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJMZR240426-GR",
+      "numerator": 4,
+      "denominator": 20
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJXNE240457-BR",
+      "numerator": 4,
+      "denominator": 26
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-08",
+      "sku": "YJXNE240457-DG",
+      "numerator": 2,
+      "denominator": 22
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "LAYJMZPG01CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 12
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "LAYJMZPG02DG-2LEFT",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "LAYJMZPG02DG-3LEFT",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 4,
+      "denominator": 19
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 3,
+      "denominator": 24
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 10,
+      "denominator": 48
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 2,
+      "denominator": 35
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 10,
+      "denominator": 98
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 30
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 3,
+      "denominator": 21
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BR",
+      "numerator": 13,
+      "denominator": 116
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 25
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJMZR240426-GR",
+      "numerator": 1,
+      "denominator": 41
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJXNE240457-BR",
+      "numerator": 3,
+      "denominator": 31
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-09",
+      "sku": "YJXNE240457-DG",
+      "numerator": 1,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZPG02CR-2LEFT",
+      "numerator": 2,
+      "denominator": 14
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZPG02CR-3LEFT",
+      "numerator": 1,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZPG02DG",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "LAYJMZPG02DG-2LEFT",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 3,
+      "denominator": 38
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 12,
+      "denominator": 73
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "SR-YJDXR240424-GREEN",
+      "numerator": 2,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 2,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 4,
+      "denominator": 26
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BE",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 2,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BR",
+      "numerator": 4,
+      "denominator": 17
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJMZR240426-BR",
+      "numerator": 6,
+      "denominator": 19
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJMZR240426-GR",
+      "numerator": 7,
+      "denominator": 17
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJPWMR2026118-BR",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BE",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BLUE",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BR",
+      "numerator": 1,
+      "denominator": 27
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-LB",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJSR240445-KQ",
+      "numerator": 3,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJXNE240457-BR",
+      "numerator": 7,
+      "denominator": 58
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-10",
+      "sku": "YJXNE240457-DG",
+      "numerator": 2,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "LAYJMZPG02CR-2LEFT",
+      "numerator": 1,
+      "denominator": 12
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "LAYJMZPG02CR-3LEFT",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "LAYJMZPG02DG-2LEFT",
+      "numerator": 2,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "LAYJMZPG02DG-3LEFT",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 7,
+      "denominator": 34
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "SR-YJDXR240424-GREEN",
+      "numerator": 2,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 27
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 1,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BR",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJMZR240426-GR",
+      "numerator": 2,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJPWMR2026118-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BE",
+      "numerator": 2,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BLUE",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BR",
+      "numerator": 0,
+      "denominator": 15
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-LB",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJSR240445-KQ",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJXNE240457-BR",
+      "numerator": 3,
+      "denominator": 54
+    },
+    {
+      "team": "Team 1",
+      "store": "KornerHK_US",
+      "month": "2026-11",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-06",
+      "sku": "LAYJHLR8005DG-LT",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-06",
+      "sku": "LAYJMZP240458LG-2L",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG02DG-LT",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-07",
+      "sku": "LAYJMZP240458LG-2L",
+      "numerator": 0,
+      "denominator": 26
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-07",
+      "sku": "LAYJMZPG02DG-LT",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-08",
+      "sku": "LAYJMZP240458LG-2L",
+      "numerator": 0,
+      "denominator": 33
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-09",
+      "sku": "LAYJMZP240458LG-2L",
+      "numerator": 0,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-10",
+      "sku": "LAYJMZP0458LG-3MT",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-10",
+      "sku": "LAYJMZP202641DBR-2LT",
+      "numerator": 4,
+      "denominator": 9
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-11",
+      "sku": "LAYJMZP0458LG-3MT",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "southwest_US",
+      "month": "2026-11",
+      "sku": "LAYJMZP202641DBR-2LT",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018BK-2L",
+      "numerator": 0,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018BK-3L",
+      "numerator": 2,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 3,
+      "denominator": 79
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 1,
+      "denominator": 46
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018DG-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018DG-3L",
+      "numerator": 2,
+      "denominator": 23
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG01CR-2L",
+      "numerator": 3,
+      "denominator": 24
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG01CR-3L",
+      "numerator": 1,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 1,
+      "denominator": 63
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG01LG-3L",
+      "numerator": 1,
+      "denominator": 14
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG02CR",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 1,
+      "denominator": 56
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 1,
+      "denominator": 38
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "LAYJMZPG02DG-3L",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 2,
+      "denominator": 42
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 1,
+      "denominator": 13
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 0,
+      "denominator": 18
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "SR-YJDXR240424-DG",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 16
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BR",
+      "numerator": 8,
+      "denominator": 37
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "YJMZR240426-BR",
+      "numerator": 1,
+      "denominator": 27
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-04",
+      "sku": "YJMZR240426-GR",
+      "numerator": 2,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "8045PK",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018BK-2L",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 8,
+      "denominator": 77
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 7,
+      "denominator": 33
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018DG-3L",
+      "numerator": 6,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 3,
+      "denominator": 44
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG01LG-3L",
+      "numerator": 4,
+      "denominator": 10
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02CR",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 5,
+      "denominator": 32
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 4,
+      "denominator": 27
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02DG-3L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 1,
+      "denominator": 34
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 1,
+      "denominator": 12
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 3,
+      "denominator": 11
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BR",
+      "numerator": 4,
+      "denominator": 5
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-BR",
+      "numerator": 4,
+      "denominator": 6
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-06",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-06",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-06",
+      "sku": "SR-YJCRR240421BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-07",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-08",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-08",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-09",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-10",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 1",
+      "store": "xingshan_US",
+      "month": "2026-11",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 31
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "XNE-WMR240440-BE",
+      "numerator": 2,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 1,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 6,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BR",
+      "numerator": 17,
+      "denominator": 129
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 3,
+      "denominator": 4
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 2,
+      "denominator": 30
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJXNE240457-BR",
+      "numerator": 3,
+      "denominator": 18
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-04",
+      "sku": "YJXNE240457-DG",
+      "numerator": 1,
+      "denominator": 34
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 2,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 1,
+      "denominator": 18
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 26
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BE",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 1,
+      "denominator": 11
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BR",
+      "numerator": 18,
+      "denominator": 107
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 16
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 2,
+      "denominator": 25
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-BR",
+      "numerator": 3,
+      "denominator": 33
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-DG",
+      "numerator": 4,
+      "denominator": 8
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 9
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 6,
+      "denominator": 68
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 2,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 1,
+      "denominator": 4
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 13
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 3,
+      "denominator": 15
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BR",
+      "numerator": 22,
+      "denominator": 191
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-LB",
+      "numerator": 2,
+      "denominator": 15
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJMZR240426-BR",
+      "numerator": 2,
+      "denominator": 19
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJMZR240426-GR",
+      "numerator": 3,
+      "denominator": 11
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 3,
+      "denominator": 39
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 1,
+      "denominator": 12
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-06",
+      "sku": "YJXNE240457-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "LAYJMZPG02CR-3L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 11,
+      "denominator": 59
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "SR-YJCRR240421GR",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 5,
+      "denominator": 9
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YAR-SR240442-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BE",
+      "numerator": 2,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 2,
+      "denominator": 17
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BR",
+      "numerator": 17,
+      "denominator": 119
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-LB",
+      "numerator": 2,
+      "denominator": 12
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJMZR240426-BR",
+      "numerator": 2,
+      "denominator": 4
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJMZR240426-GR",
+      "numerator": 3,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 2,
+      "denominator": 16
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 3,
+      "denominator": 23
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 2,
+      "denominator": 14
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-DG",
+      "numerator": 2,
+      "denominator": 9
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 3,
+      "denominator": 11
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 8,
+      "denominator": 51
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 2,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BE",
+      "numerator": 3,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 3,
+      "denominator": 7
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BR",
+      "numerator": 11,
+      "denominator": 82
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-LB",
+      "numerator": 1,
+      "denominator": 12
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJMZR240426-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 4,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 1,
+      "denominator": 19
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 5,
+      "denominator": 15
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-08",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-09",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 2,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BR",
+      "numerator": 4,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-LB",
+      "numerator": 2,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-09",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-10",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BE",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BR",
+      "numerator": 2,
+      "denominator": 4
+    },
+    {
+      "team": "Team 2",
+      "store": "Wekas_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-LB",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-07",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 19
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 1,
+      "denominator": 8
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 26
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 0,
+      "denominator": 13
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-08",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "MSR-YJDXR240424-BR",
+      "numerator": 1,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 7,
+      "denominator": 55
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 2,
+      "denominator": 9
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 3,
+      "denominator": 27
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 97
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 3,
+      "denominator": 19
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 3,
+      "denominator": 28
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 1,
+      "denominator": 14
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-09",
+      "sku": "YJXNE240457-DG",
+      "numerator": 2,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 3,
+      "denominator": 28
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 2,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 9
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BR",
+      "numerator": 2,
+      "denominator": 25
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 1,
+      "denominator": 6
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 7,
+      "denominator": 26
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 1,
+      "denominator": 14
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BE",
+      "numerator": 2,
+      "denominator": 5
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BLUE",
+      "numerator": 2,
+      "denominator": 4
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BR",
+      "numerator": 6,
+      "denominator": 29
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-LB",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJXNE240457-BR",
+      "numerator": 2,
+      "denominator": 2
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-10",
+      "sku": "YJXNE240457-DG",
+      "numerator": 2,
+      "denominator": 16
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 4,
+      "denominator": 17
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 1,
+      "denominator": 7
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 9
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 3,
+      "denominator": 11
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 1,
+      "denominator": 10
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BR",
+      "numerator": 2,
+      "denominator": 18
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 2",
+      "store": "kaifengzhejie_US",
+      "month": "2026-11",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-06",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-10",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "AmazonMJSKY_US_US",
+      "month": "2026-11",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-BR",
+      "numerator": 1,
+      "denominator": 20
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-06",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 1,
+      "denominator": 6
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-BR",
+      "numerator": 1,
+      "denominator": 10
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 8
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 5
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "YJMZR240426-GR",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-08",
+      "sku": "YJXNE240457-DG",
+      "numerator": 1,
+      "denominator": 8
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 2,
+      "denominator": 6
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-BR",
+      "numerator": 2,
+      "denominator": 48
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJXNE240457-BR",
+      "numerator": 1,
+      "denominator": 7
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-09",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 1,
+      "denominator": 7
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 3,
+      "denominator": 12
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "SR-YJDXR240424-GREEN",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 2,
+      "denominator": 21
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 3,
+      "denominator": 23
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 1,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 47
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJMZR240426-BR",
+      "numerator": 1,
+      "denominator": 8
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJMZR240426-GR",
+      "numerator": 3,
+      "denominator": 31
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJPWMR2026118-BR",
+      "numerator": 1,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BE",
+      "numerator": 2,
+      "denominator": 9
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BLUE",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-BR",
+      "numerator": 16,
+      "denominator": 76
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJSR221118-LB",
+      "numerator": 2,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJSR240445-KQ",
+      "numerator": 1,
+      "denominator": 16
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJXNE240457-BR",
+      "numerator": 2,
+      "denominator": 29
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-10",
+      "sku": "YJXNE240457-DG",
+      "numerator": 1,
+      "denominator": 12
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "MSR-YJDXR240424-WH",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "SR-YJDXR240424-BE",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "SR-YJDXR240424-GREEN",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 13
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 6
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJPWMR2026118-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BE",
+      "numerator": 0,
+      "denominator": 15
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BLUE",
+      "numerator": 0,
+      "denominator": 9
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-BR",
+      "numerator": 2,
+      "denominator": 117
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJSR221118-LB",
+      "numerator": 0,
+      "denominator": 10
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJSR240445-KQ",
+      "numerator": 1,
+      "denominator": 17
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 23
+    },
+    {
+      "team": "Team 3",
+      "store": "RUIBAO_US_US",
+      "month": "2026-11",
+      "sku": "YJXNE240457-DG",
+      "numerator": 1,
+      "denominator": 16
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018CR-2L",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "LAYJMZP8018CR-3L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "SR-YJCRR240456-BE",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "SR-YJDXR240424-DG",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "YJMR221118-BR",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 3
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "YJSR-NPG01-BE",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "YJSR-NPG01-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "YJSR-NPG01-GR",
+      "numerator": 1,
+      "denominator": 5
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-04",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 7
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG01LG-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "LAYJMZPG02CR-2L",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "SR-YJXNR240449-BR",
+      "numerator": 0,
+      "denominator": 4
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "XNE-YJMR240455-GY",
+      "numerator": 1,
+      "denominator": 6
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "XXF-SR230407-BE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BLUE",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-BR",
+      "numerator": 0,
+      "denominator": 13
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJMR221118-LB",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-BR",
+      "numerator": 0,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJMZR240426-GR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-BR",
+      "numerator": 2,
+      "denominator": 30
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-05",
+      "sku": "YJXNE240457-DG",
+      "numerator": 1,
+      "denominator": 2
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-06",
+      "sku": "YJXNE240457-BR",
+      "numerator": 0,
+      "denominator": 1
+    },
+    {
+      "team": "Team 3",
+      "store": "maoyitong_US",
+      "month": "2026-07",
+      "sku": "YJXNE240457-DG",
+      "numerator": 0,
+      "denominator": 1
+    }
+  ],
+  "reasons": {
+    "connected": false,
+    "items": null
+  }
+}

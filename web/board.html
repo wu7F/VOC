@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>售后 VOC 看板</title>
+<meta name="description" content="只读多维表格看板，展示 Amazon 销量矩阵；售后分子与原因尚未接入。">
+<style>
+:root{--bg:#fff;--surface:#fafaf8;--ink:#1c1b19;--ink2:#4a4843;--muted:#8a867f;--line:#e6e3dc;--fill:#f3f1ec;--accent:#2f5d8a;--bad:#dc2626;--font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#161614;--surface:#1c1c1a;--ink:#f1efe9;--ink2:#c9c5bc;--muted:#8d8981;--line:#2e2d2a;--fill:#242421;--accent:#7fb0e0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--font)}
+.note{margin:14px 20px 0;padding:10px 14px;border-radius:8px;background:var(--fill);color:var(--ink2);font-size:13px}
+.note.warn{border:1px solid #e8c48a;background:#fff8eb;color:#8a5a00}
+#stale-banner .note.warn{margin:10px 20px 0}
+.app{margin:14px 20px 28px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.live{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:13px}
+.live i{width:8px;height:8px;border-radius:50%;background:#16a34a;animation:p 2s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 #16a34a88}70%{box-shadow:0 0 0 7px #16a34a00}100%{box-shadow:0 0 0 0 #16a34a00}}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}}
+button{font:inherit}
+#refresh-btn{border:1px solid var(--line);background:var(--bg);color:var(--ink2);border-radius:6px;padding:5px 10px;cursor:pointer}
+#refresh-btn:hover{background:var(--fill)}
+.side{display:grid;grid-template-columns:150px 1fr;min-height:560px}
+.nav{border-right:1px solid var(--line);padding:12px 8px;font-size:13px}
+.nav small{display:block;color:var(--muted);padding:10px 10px 2px;font-size:11px;letter-spacing:.08em}
+.nav button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink2);padding:7px 10px;border-radius:6px;font:inherit;cursor:pointer}
+.nav button:hover{background:var(--fill)}.nav button.on{background:var(--fill);color:var(--ink);font-weight:600}
+.main{padding:16px;min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:10px 14px}.kpi small{display:block;color:var(--muted);font-size:12px}
+.kpi strong{font-size:22px;font-variant-numeric:tabular-nums}.kpi span{display:block;color:var(--muted);font-size:12px}
+table.hm{width:100%;border-collapse:separate;border-spacing:3px;font-size:12px;font-variant-numeric:tabular-nums}
+.hm th{font-weight:500;color:var(--muted);font-size:12px;text-align:center}
+.hm td{text-align:center;padding:0;border-radius:4px}.hm td.n{text-align:left;padding-left:6px}
+.hm tr.g td{font-weight:600;padding:12px 0 2px 6px;text-align:left}
+.hm td button{width:100%;border:0;padding:8px 0;border-radius:4px;color:inherit;font:inherit;background:transparent;cursor:pointer}
+.hm td button:hover,.hm td button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.hm td.na,.hm td.rate-na{background:var(--fill);color:var(--muted);padding:8px 0}.hm td.rate-na button{color:var(--muted)}
+.ok{color:#15803d}.warn{color:#b45309}.bad{color:#b91c1c}.nac{color:var(--muted)}
+.leg{display:flex;gap:10px;font-size:12px;color:var(--muted);margin-top:10px;align-items:center;flex-wrap:wrap}.leg b{width:14px;height:14px;border-radius:3px;display:inline-block}
+.crumb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:13px;color:var(--muted)}
+.crumb button{border:0;background:none;color:var(--accent);cursor:pointer;font:inherit;padding:0}.crumb b{color:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.chips button{border:1px solid var(--line);background:var(--bg);color:var(--ink2);padding:5px 12px;border-radius:99px;font:inherit;cursor:pointer;font-size:13px}
+.chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.flt{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:12px;color:var(--muted)}
+.flt button{border:1px solid var(--line);background:var(--bg);color:var(--ink2);padding:3px 10px;border-radius:99px;font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center}
+.flt button.on{background:var(--fill);color:var(--ink);border-color:var(--ink2);font-weight:600}
+.flt button.off .dot{opacity:.3}.flt button.sku-choice{flex-direction:column;align-items:flex-start;max-width:220px;white-space:normal}.flt button.sku-choice .dot{margin-right:0}.flt .sku-label{font-weight:500;overflow-wrap:anywhere;text-align:left}.flt .sku-code{display:block;color:var(--muted);font-size:10px;line-height:1.2;overflow-wrap:anywhere}.selected-sku-name{font-size:16px;overflow-wrap:anywhere}
+.flt .lnk{border:0;background:none;color:var(--accent);padding:3px 4px}
+.sku-table-controls input[type=search]{flex:1;min-width:140px;max-width:100%;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
+.sku-search-count{font-size:12px;color:var(--muted)}.sku-search-empty{padding:12px;font-size:13px}
+.cols{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:16px}
+.sku-table-scroll{max-width:100%;min-width:0;overflow-x:auto;}
+.sk td.sku-code,.flt .sku-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);font-size:11px}
+.card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:14px;min-width:0}
+.card h3{margin:0 0 2px;font-size:14px}.card p{margin:0 0 8px;color:var(--muted);font-size:12px}
+table.sk{width:100%;min-width:600px;table-layout:fixed;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.sk th,.sk td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right}.sk th:first-child,.sk td:first-child{text-align:left}
+.sk th{color:var(--muted);font-weight:500;font-size:12px}
+.sk th:nth-child(1),.sk td:nth-child(1){width:34%;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+.sk th:nth-child(2),.sk td:nth-child(2){width:22%;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+.sk th:nth-child(3),.sk td:nth-child(3){width:22%;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+table.sk th:nth-child(4),table.sk td:nth-child(4),table.sk th:nth-child(5),table.sk td:nth-child(5),table.sk th:nth-child(6),table.sk td:nth-child(6){white-space:nowrap}
+.sk tbody tr{cursor:pointer}.sk tbody tr:hover{background:var(--fill)}.sk tbody tr.on{background:var(--fill);font-weight:600}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.chart{position:relative}.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:6px;font-size:12px;line-height:1.5;display:none;white-space:nowrap;z-index:5}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-top:6px}
+.warnbox{padding:10px 12px;border-radius:8px;background:var(--fill);color:var(--ink2);font-size:13px;margin-bottom:12px}
+.diag{margin:12px 0;padding:10px 12px;border-radius:8px;background:var(--fill);color:var(--ink2);font-size:12px}
+.diag summary{cursor:pointer;font-weight:600}
+.diag ul{margin:8px 0 0 18px;padding:0}
+@media (max-width:760px){.side{grid-template-columns:1fr}.nav{border-right:0;border-bottom:1px solid var(--line)}.nav button{display:inline-block;width:auto}.kpis,.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="note">交互式模拟预览，使用固定确认快照；不连接真实业务数据，不同步、不写入。售后原因尚未接入。</div>
+<div class="app">
+  <div class="top">
+    <h1 style="margin:0;font-size:15px">售后 VOC 看板</h1>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="banner"></span>
+      <button id="refresh-btn" data-bind="action" data-action="refresh">立即刷新</button>
+    </div>
+  </div>
+  <div id="stale-banner"></div>
+  <div class="side">
+    <nav class="nav" id="nav"><small>加载中…</small></nav>
+    <div class="main" id="main"><div class="warnbox">正在读取多维表格…</div></div>
+  </div>
+</div>
+<script src="/board.js"></script>
+</body>
+</html>
