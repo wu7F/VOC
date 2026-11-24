@@ -11,6 +11,7 @@ function t(name, fn) {
 function makeSnapshot() {
   return {
     months: ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'],
+    products: [{ sku: 'S', display_name: '名称', t01: false }],
     aftersale: { connected: true, sku_store_month: [], store_month: [], teams: [], total: {} },
     teams: [{
       name: 'Team 1',
@@ -23,12 +24,13 @@ function makeSnapshot() {
   };
 }
 function add(snap, team, sku, month, n, d) {
+  if (!snap.products.some(p => p.sku === sku)) snap.products.push({sku, display_name: sku, t01: false});
   snap.aftersale.sku_store_month.push({ team, sku, month, numerator: n, denominator: d });
 }
 
 // aggregateProductMonths
 
-t('aggregate direct S April 10/100 rate 10, input unchanged', () => {
+t('global Amazon sum is 60/200, independent of selected Team, input unchanged', () => {
   const snap = makeSnapshot();
   snap.aftersale.sku_store_month = [
     { team: 'Team 1', account: 'a', sku: 'S', month: '2026-04', numerator: 1, denominator: 2 },
@@ -40,7 +42,8 @@ t('aggregate direct S April 10/100 rate 10, input unchanged', () => {
   assert.strictEqual(agg.connected, true);
   assert.strictEqual(agg.items.length, 1);
   assert.strictEqual(agg.items[0].sku, 'S');
-  assert.deepStrictEqual(agg.items[0].months['2026-04'], { numerator: 10, denominator: 100, rate: 10 });
+  assert.deepStrictEqual(agg.items[0].months['2026-04'], { numerator: 60, denominator: 200, rate: 30 });
+  for (const view of ['all', 'Team 2', 'Team 3']) assert.deepStrictEqual(board.aggregateProductMonths(snap, view), agg);
   assert.deepStrictEqual(snap, before);
 });
 
@@ -58,9 +61,7 @@ t('zero denominator 0 creates point, n1/d0 null, missing month undefined, invali
   assert.strictEqual(s.months['2026-04'].rate, 0);
   assert.strictEqual(s.months['2026-05'].rate, null);
   assert.strictEqual(s.months['2026-06'], undefined);
-  assert.strictEqual(agg.items.some(i => i.sku === 'C'), false);
-  assert.strictEqual(agg.items.some(i => i.sku === 'D'), false);
-  assert.strictEqual(agg.items.some(i => i.sku === 'E'), false);
+  for (const sku of ['C','D','E']) assert.deepStrictEqual(agg.items.find(i => i.sku === sku).months, {});
 });
 
 t('distinct SKU same name not merged, T01 metadata only not in items, extra names irrelevant', () => {
@@ -70,6 +71,7 @@ t('distinct SKU same name not merged, T01 metadata only not in items, extra name
     { sku: 'S2', display_name: 'Same' },
     { sku: 'T01', display_name: 'Excluded top-level only', sold: { '2026-04': 15 } }
   ];
+  snap.products = snap.teams[0].shops[0].skus.map(p => ({...p, t01: p.sku === 'T01'}));
   snap.aftersale.sku_store_month = [];
   add(snap, 'Team 1', 'S1', '2026-04', 1, 10);
   add(snap, 'Team 1', 'S2', '2026-04', 1, 20);
@@ -131,28 +133,30 @@ t('real zero => circle data-value=0', () => {
 
 t('all gap (n1/d0) => no circles and 无法计算', () => {
   const snap = makeSnapshot();
-  snap.teams[0].shops[0].skus = [{ sku: 'G', display_name: 'Gap' }];
+  snap.products = [{ sku: 'G', display_name: 'Gap' }];
   snap.aftersale.sku_store_month = [];
   add(snap, 'Team 1', 'G', '2026-04', 1, 0);
   const html = board.renderProductMonthsHtml(snap, { view: 'Team 1' });
   assert.strictEqual((html.match(/<circle/g) || []).length, 0);
-  assert.ok(html.includes('无法计算售后率'));
+  assert.ok(html.includes('暂无可计算的月度售后率'));
 });
 
 t('hostile names escaped, Team ARIA label', () => {
   const snap = makeSnapshot();
   snap.teams[0].shops[0].skus = [{ sku: 'S', display_name: '<script>alert(1)</script>' }];
+  snap.products = snap.teams[0].shops[0].skus.map(p => ({...p}));
   snap.aftersale.sku_store_month = [];
   add(snap, 'Team 1', 'S', '2026-04', 1, 10);
   const html = board.renderProductMonthsHtml(snap, { view: 'Team 1' });
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
   assert.ok(!html.includes('<script>alert'));
-  assert.match(html, /<svg[^>]*aria-label="Team 1 /);
+  assert.match(html, /<svg[^>]*aria-label="全部亚马逊 /);
 });
 
 t('13 products stable SKU01..13 => page 3 has 1 card, page99 clamps', () => {
   const snap = makeSnapshot();
   snap.teams[0].shops[0].skus = [];
+  snap.products = [];
   for (let i = 1; i <= 13; i++) {
     snap.teams[0].shops[0].skus.push({ sku: `SKU${String(i).padStart(2, '0')}`, display_name: `Product ${i}` });
   }
@@ -169,6 +173,7 @@ t('13 products stable SKU01..13 => page 3 has 1 card, page99 clamps', () => {
 t('search SKU13 before pagination, no-match form stays, clear restore', () => {
   const snap = makeSnapshot();
   snap.teams[0].shops[0].skus = [];
+  snap.products = [];
   for (let i = 1; i <= 13; i++) {
     snap.teams[0].shops[0].skus.push({ sku: `SKU${String(i).padStart(2, '0')}`, display_name: `Product ${i}` });
   }
@@ -191,7 +196,7 @@ t('search SKU13 before pagination, no-match form stays, clear restore', () => {
 
 // renderMatrixHtml basic pure checks
 
-t('renderMatrixHtml Independent/Wayfair no KPI/SVG, all product mode 请选择Team', () => {
+t('placeholders remain empty, all product mode renders the global catalogue', () => {
   const snap = makeSnapshot();
   let html = board.renderMatrixHtml(snap, { view: 'Independent' });
   assert.ok(!html.includes('<svg'));
@@ -200,15 +205,41 @@ t('renderMatrixHtml Independent/Wayfair no KPI/SVG, all product mode 请选择Te
   assert.ok(!html.includes('<svg'));
   assert.ok(!html.includes('KPI'));
   html = board.renderMatrixHtml(snap, { view: 'all', matrixMode: 'product' });
-  assert.ok(html.includes('请选择') && html.includes('Team'));
+  assert.ok(!html.includes('请选择') && html.includes('<svg') && html.includes('全部亚马逊'));
+  assert.strictEqual(html, board.renderMatrixHtml(snap, { view: 'Team 1', matrixMode: 'product' }));
 });
 
-t('renderMatrixHtml disconnected has warning no SVG', () => {
+t('disconnected retains catalogue charts as gaps and warning', () => {
   const snap = makeSnapshot();
   snap.aftersale.connected = false;
   const html = board.renderMatrixHtml(snap, { view: 'Team 1', matrixMode: 'product' });
   assert.ok(html.includes('warnbox'));
-  assert.ok(!html.includes('<svg'));
+  assert.ok(html.includes('<svg') && !html.includes('<circle'));
+});
+
+t('catalogue-only products remain unknown, zero flags never manufacture data', () => {
+  const snap = makeSnapshot();
+  snap.products.push({sku:'ZERO', confirmed_zero:true}, {sku:'NEVER'}, {sku:'EXCLUDED',t01:true});
+  snap.aftersale.sku_store_month.push({team:'Team 1',sku:'OUTSIDE',month:'2026-04',numerator:5,denominator:10});
+  let agg = board.aggregateProductMonths(snap);
+  assert.deepStrictEqual(agg.items.map(p => p.sku), ['S','ZERO','NEVER']);
+  assert.deepStrictEqual(agg.items.find(p => p.sku==='ZERO').months, {});
+  add(snap,'Team 1','ZERO','2026-04',0,0);
+  agg = board.aggregateProductMonths(snap);
+  assert.deepStrictEqual(agg.items.find(p => p.sku==='ZERO').months['2026-04'],{numerator:0,denominator:0,rate:null});
+  const missing = makeSnapshot(); delete missing.products;
+  assert.ok(board.renderProductMonthsHtml(missing,{}).includes('产品目录尚未接入'));
+});
+
+t('known zero sales display as 0 but never create a 0% point without aftersale data', () => {
+  const snap = makeSnapshot();
+  snap.teams[0].shops[0].skus[0].sold = {'2026-04':0,'2026-05':null};
+  let html = board.renderProductMonthsHtml(snap,{});
+  assert.ok(html.includes('<td>2026-04</td><td>—</td><td>0</td><td>—</td>'));
+  assert.ok(html.includes('<td>2026-05</td><td>—</td><td>—</td><td>—</td>'));
+  assert.ok(!html.includes('<circle'));
+  snap.aftersale.connected = false;
+  assert.ok(board.renderProductMonthsHtml(snap,{}).includes('<td>2026-04</td><td>—</td><td>0</td><td>—</td>'));
 });
 
 console.log('synthetic_only pass ' + pass);

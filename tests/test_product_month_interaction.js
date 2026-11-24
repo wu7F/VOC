@@ -113,6 +113,7 @@ function makeSnapshot(skuCount) {
       sold: { ...soldZero }
     }
   ];
+  snap.products = [...team1Skus, ...snap.teams[1].shops[0].skus].map(p => ({sku:p.sku,display_name:p.display_name,t01:false}));
 
   // aftersale.sku_store_month rows
   const rows = [];
@@ -246,13 +247,15 @@ async function createBoard(initialQueue = []) {
     }
     passed++;
 
-    // Team2 resets query/page, preserves product mode
+    // Team selection does not change global product query or data scope.
     await board.submit('SKU13');
     await board.click({ 'data-bind': 'nav', 'data-view': 'Team 2' });
     products = board.elements.main.innerHTML;
-    assert(products.includes('SKU20'), 'Team2 should show SKU20');
-    assert(!products.includes('SKU01'), 'Team2 should not show Team1 SKUs');
-    assert(products.includes('value=""') && products.includes('第 1 / 1 页'), 'Team switch clears query and page');
+    assert(products.includes('SKU13') && products.includes('value="SKU13"'), 'Global query persists across Team selection');
+    assert(products.includes('第 1 / 1 页'), 'Filtered global catalogue remains one page');
+    const beforeAll = products;
+    await board.click({ 'data-bind': 'nav', 'data-view': 'all' });
+    assert.strictEqual(board.elements.main.innerHTML, beforeAll, 'All view renders the same global products, never a Team prompt');
     passed++;
 
     // Placeholder navigation must not display Amazon charts or product controls.
@@ -261,6 +264,7 @@ async function createBoard(initialQueue = []) {
     assert(products.includes('未接入') && !products.includes('<svg') && !products.includes('product-card'));
     // Back to Team1, product mode retained.
     await board.click({ 'data-bind': 'nav', 'data-view': 'Team 1' });
+    await board.submit('');
     products = board.elements.main.innerHTML;
     assert(products.includes('SKU01') && products.includes('SKU06'), 'Team1 product matrix page1 restored');
     assert(products.includes('<svg'), 'Product view should contain actual SVG charts');
@@ -273,7 +277,7 @@ async function createBoard(initialQueue = []) {
     await board.click({ 'data-bind': 'action', 'data-action': 'refresh' });
     products = board.elements.main.innerHTML;
     assert(products.includes('SKU01') && !products.includes('SKU02'), 'After refresh query should persist');
-    assert(board.elements.main.innerHTML.includes('Team 1'), 'Team preserved');
+    assert(board.elements.main.innerHTML.includes('全部亚马逊'), 'Product scope is global');
     assert(board.elements.main.innerHTML.includes('product-card'), 'Mode preserved');
     passed++;
 
@@ -291,7 +295,7 @@ async function createBoard(initialQueue = []) {
     assert(!products.includes('SKU13'), 'SKU13 should disappear after shrink');
     assert(products.includes('第 2 / 2 页'), 'Page indicator should show page 2 of 2');
     const cardMatches = products.match(/class="card product-card"/g) || [];
-    assert.strictEqual(cardMatches.length, 2, 'Should show exactly 2 cards after shrink');
+    assert.strictEqual(cardMatches.length, 3, 'Global roster includes SKU07, SKU08 and the Team2 SKU20');
     passed++;
 
     // Stay in PRODUCT mode after shrink for hover tests

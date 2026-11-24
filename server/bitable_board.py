@@ -1124,6 +1124,22 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
     if aftersale_summary is None:
         aftersale_summary = _build_aftersale_summary(_load_aftersale_snapshot())
 
+    # 产品目录：基于已提供的 pair_map，序列化为只读数组。
+    products: list[dict] = []
+    if pair_map is not None:
+        from . import aftersale_live
+        zero_skus = confirmed_zero_skus or set()
+        for sku in pair_map:
+            pair = pair_map[sku]
+            display_name = pair.get("display_name") or ""
+            products.append({
+                "sku": sku,
+                "display_name": display_name,
+                "wf_part_number": pair.get("wf_part_number") or "",
+                "confirmed_zero": sku in zero_skus,
+                "t01": aftersale_live._is_t01(sku, display_name),
+            })
+
     return {
         "version": 2,
         "ok": True,
@@ -1135,6 +1151,7 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
         "teams": teams_output,
         "unmapped": unmapped,
         "other_platforms": [{"platform": p, "rows": c} for p, c in sorted(other_counts.items())],
+        "products": products,
         "aftersale": aftersale_summary,
         "wayfair": {
             "connected": False,
