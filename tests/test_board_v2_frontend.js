@@ -126,7 +126,7 @@ function ok(cond, msg) {
   // 1. 实际 nav 控件点击显示正确组
   const boardNav = await createBoard();
   const navKeys = [...boardNav.elements.nav.innerHTML.matchAll(/data-view="([^"]+)"/g)]
-    .map(m => m[1]).filter(key => !['all', 'Wayfair'].includes(key));
+    .map(m => m[1]).filter(key => !['all', 'Wayfair', 'Independent'].includes(key));
   ok(navKeys.length === 3, `应恰好 3 个 Team 导航控件，实际 ${navKeys.length}`);
   for (const view of navKeys) {
     await boardNav.click({ 'data-bind': 'nav', 'data-view': view });
@@ -139,6 +139,15 @@ function ok(cond, msg) {
     ok(!boardNav.elements.main.innerHTML.includes('该视图暂无店铺数据'),
       `点击 ${view} 不应显示空视图`);
   }
+
+  // 1.5 实际 VM 回归：详情与矩阵往返
+  const vmBoard = await createBoard();
+  await vmBoard.click({ 'data-bind': 'nav', 'data-view': 'Team 1' });
+  await vmBoard.click({ 'data-bind': 'matrix-cell', 'data-shop': 'xingshan_US', 'data-month': '2026-04' });
+  ok(vmBoard.elements.main.innerHTML.includes('selected-sku-code'), '点击矩阵单元格后应显示详情');
+  await vmBoard.click({ 'data-bind': 'nav', 'data-view': 'Team 1' });
+  ok(vmBoard.elements.main.innerHTML.includes('data-bind="matrix-cell"') &&
+     !vmBoard.elements.main.innerHTML.includes('selected-sku-code'), '再次点击 Team1 应返回矩阵视图');
 
   // 2. 刷新失败保留旧快照（HTTP 401, 500, ok:false, 坏JSON, 无效结构）
   for (const [name, body, status, jsonReject] of [

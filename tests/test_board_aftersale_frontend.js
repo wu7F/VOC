@@ -116,12 +116,18 @@ function ok(cond, msg) {
   // 1. Team 导航保留
   const board = await createBoard();
   const navKeys = [...board.elements.nav.innerHTML.matchAll(/data-view="([^"]+)"/g)]
-    .map(m => m[1]).filter(key => !['all', 'Wayfair'].includes(key));
+    .map(m => m[1]).filter(key => !['all', 'Wayfair', 'Independent'].includes(key));
   ok(navKeys.length === 3, `应恰好 3 个 Team 导航控件，实际 ${navKeys.length}`);
+  ok(board.elements.nav.innerHTML.includes('data-view="Independent"'), '导航应包含独立站未接入');
 
   // 2. Wayfair 未接入占位保留
   await board.click({ 'data-bind': 'nav', 'data-view': 'Wayfair' });
   ok(board.elements.main.innerHTML.includes('Wayfair 销量尚未接入'), 'Wayfair 应显示未接入占位');
+
+  // 2b. 独立站未接入占位
+  await board.click({ 'data-bind': 'nav', 'data-view': 'Independent' });
+  ok(board.elements.main.innerHTML.includes('独立站尚未接入'), '独立站应显示未接入占位');
+  ok(!board.elements.main.innerHTML.includes('Amazon'), '独立站占位不应包含 Amazon 指标');
 
   // 3. 矩阵页显示售后率（确认快照）
   await board.click({ 'data-bind': 'nav', 'data-view': 'all' });

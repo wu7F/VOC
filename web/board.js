@@ -172,7 +172,8 @@
     var sections = [
       ['总览', [['all', '全部']]],
       ['AMAZON', [['Team 1', 'Team 1'], ['Team 2', 'Team 2'], ['Team 3', 'Team 3']]],
-      ['WAYFAIR', [['Wayfair', '未接入']]]
+      ['WAYFAIR', [['Wayfair', '未接入']]],
+      ['独立站', [['Independent', '未接入']]]
     ];
     return sections.map(function (sec) {
       var h = '<small>' + esc(sec[0]) + '</small>';
@@ -185,6 +186,143 @@
     }).join('');
   }
 
+  function aggregateProductMonths(snapshot, teamName) {
+    var rows = (snapshot && snapshot.aftersale && snapshot.aftersale.sku_store_month) || [];
+    var connected = !!(snapshot && snapshot.aftersale && snapshot.aftersale.connected);
+    if (!connected || !teamName) return { connected: connected, items: [], names: Object.create(null) };
+    var names = Object.create(null);
+    (snapshot.teams || []).forEach(function (t) {
+      if (!t || t.name !== teamName) return;
+      (t.shops || []).forEach(function (s) {
+        (s.skus || []).forEach(function (sku) {
+          if (sku && sku.sku) {
+            names[sku.sku] = sku.display_name || '';
+          }
+        });
+      });
+    });
+    var skuMap = Object.create(null);
+    var order = [];
+    function getSkuRec(sku) {
+      if (!skuMap[sku]) {
+        var rec = { sku: sku, months: {} };
+        skuMap[sku] = rec;
+        order.push(sku);
+      }
+      return skuMap[sku];
+    }
+    function isValidCount(val) {
+      return typeof val === 'number' && isFinite(val) && val >= 0;
+    }
+    rows.forEach(function (r) {
+      if (!r || r.team !== teamName) return;
+      var sku = r.sku;
+      var month = r.month;
+      if (!sku || !month) return;
+      sku = String(sku);
+      month = String(month);
+      if (month < '2026-04' || month > '2026-11') return;
+      if (!isValidCount(r.numerator) || !isValidCount(r.denominator)) return;
+      var n = Number(r.numerator);
+      var d = Number(r.denominator);
+      var skuRec = getSkuRec(sku);
+      if (!skuRec.months[month]) {
+        skuRec.months[month] = { numerator: 0, denominator: 0, rate: null };
+      }
+      var m = skuRec.months[month];
+      m.numerator += n;
+      m.denominator += d;
+      if (m.denominator > 0) {
+        m.rate = m.numerator / m.denominator * 100;
+      } else {
+        m.rate = null;
+      }
+    });
+    var items = order.map(function (sku) {
+      names[sku] = names[sku] || '';
+      return skuMap[sku];
+    }).sort(function (a, b) {
+      return a.sku.localeCompare(b.sku);
+    });
+    return { connected: connected, items: items, names: names };
+  }
+
+  function renderProductMonthsHtml(snapshot, state) {
+    state = state || {};
+    var aggregated = aggregateProductMonths(snapshot, state.view);
+    var months = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+    var allItems = aggregated.items || [];
+    var query = state.productQuery || '';
+    var filtered = allItems.filter(function (item) {
+      if (!query || !query.trim()) return true;
+      var q = query.trim().toLocaleLowerCase();
+      var label = ((aggregated.names[item.sku] || '') + ' ' + item.sku).toLocaleLowerCase();
+      return label.indexOf(q) >= 0;
+    });
+    var perPage = 6;
+    var total = filtered.length;
+    var pages = Math.max(1, Math.ceil(total / perPage));
+    var page = Math.max(1, Math.min(state.productPage || 1, pages));
+    state.productPage = page;
+    var sliceStart = (page - 1) * perPage;
+    var pageItems = filtered.slice(sliceStart, sliceStart + perPage);
+    if (!aggregated.connected) {
+      return '<div class="warnbox">售后分子和原因尚未接入多维表格，售后率显示“—”，不按 0% 计算</div>';
+    }
+    var controls = '<div class="product-controls"><form data-bind="product-search">' +
+      '<label for="product-query">搜索产品</label>' +
+      '<input id="product-query" type="search" data-bind="product-query" value="' + esc(query || '') + '" placeholder="产品名称或 SKU 编码" autocomplete="off">' +
+      '<button type="submit">搜索</button>' +
+      '</form>' +
+      '<div class="product-page-nav"><button type="button" data-bind="product-page" data-delta="-1"' +
+      (page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+      '<span>第 ' + page + ' / ' + pages + ' 页 · 共 ' + total + ' 个产品</span>' +
+      '<button type="button" data-bind="product-page" data-delta="1"' +
+      (page >= pages ? ' disabled' : '') + '>下一页</button></div></div>';
+    if (!allItems.length) {
+      return controls + '<div class="warnbox">当前 Team 没有可用的 SKU 月度售后率数据</div>';
+    }
+    if (!pageItems.length) {
+      return controls + '<div class="warnbox">搜索没有匹配的 SKU，请清除搜索条件后重试</div>';
+    }
+    var h = '<div class="product-intro">固定2026年4–11月；无已知正销售月份为空档；0% 表示有已知销售且无售后。</div>';
+    h += controls;
+    h += '<div class="product-cards">';
+    pageItems.forEach(function (item, idx) {
+      var values = months.map(function (m) {
+        var rec = item.months[m];
+        return rec ? rec.rate : null;
+      });
+      var series = [{
+        name: item.sku,
+        color: color(idx),
+        values: values
+      }];
+      var metadataName = aggregated.names[item.sku];
+      var displayName = (metadataName && metadataName !== item.sku) ? metadataName + '（' + item.sku + '）' : item.sku;
+      var label = state.view + ' ' + displayName + ' 售后率折线图';
+      h += '<div class="card product-card"><h3>' + esc(displayName) + '</h3>' +
+        '<div class="chart" data-chart="rate">' +
+        renderLineChartHtml(series, months, { fmt: fmtRate, label: label }) +
+        '</div>' +
+        '<details class="diag product-details"><summary>查看月度明细</summary>' +
+        '<div class="product-table-wrap"><table class="product-month-table"><thead><tr><th>月份</th><th>售后件数</th><th>销售件数</th><th>售后率</th></tr></thead><tbody>' +
+        months.map(function (m) {
+          var rec = item.months[m];
+          var num = rec && rec.numerator != null ? rec.numerator : '—';
+          var den = rec && rec.denominator != null ? rec.denominator : '—';
+          var rate = rec && rec.rate != null ? fmtRate(rec.rate) : '—';
+          return '<tr><td>' + m + '</td><td>' + num + '</td><td>' + den + '</td><td>' + rate + '</td></tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+        '</details>' +
+        (values.every(function (v) { return v === null; }) ? '<p class="all-gap">该产品在2026年4–11月所有月份均无有效销售数据，无法计算售后率。</p>' : '') +
+        '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
   function renderMatrixHtml(snapshot, state) {
     state = state || {};
     if (!snapshot || snapshot.ok === false) return '<div class="warnbox">没有可用数据</div>';
@@ -192,6 +330,9 @@
       var wayfairMessage = (snapshot.wayfair && snapshot.wayfair.message) || 'Wayfair 销量尚未接入';
       return '<div class="warnbox">Wayfair 销量尚未接入</div><div class="card"><p>' +
         esc(wayfairMessage) + '</p></div>';
+    }
+    if (state.view === 'Independent') {
+      return '<div class="warnbox">独立站尚未接入</div>';
     }
     var months = snapshot.months || [];
     if (!months.length) return '<div class="warnbox">暂无月份数据</div>';
@@ -223,6 +364,18 @@
     var totalUnpairedDisplay = hasUnknownUnpaired ? null : totalUnpaired;
 
     var h = renderKpis(snapshot, state.view);
+    h += '<div class="matrix-mode"><button type="button" data-bind="matrix-mode" data-mode="store" class="' +
+      (state.matrixMode !== 'product' ? 'on' : '') + '">店铺×月份</button>' +
+      '<button type="button" data-bind="matrix-mode" data-mode="product" class="' +
+      (state.matrixMode === 'product' ? 'on' : '') + '">产品×月份</button></div>';
+    if (state.matrixMode === 'product') {
+      if (state.view === 'all') {
+        h += '<div class="warnbox">请选择Team</div>';
+      } else {
+        h += renderProductMonthsHtml(snapshot, state);
+      }
+      return h;
+    }
     h += '<div class="matrix-summary"><strong>' + (state.view === 'all' ? '全部' : esc(state.view)) +
       '</strong> · 产品销量分母：' + fmtUnits(totalKnown) +
       ' · 未配对数量：' + fmtUnits(totalUnpairedDisplay) +
@@ -659,6 +812,9 @@
       month: null,
       selectedSku: null,      // 字符串 SKU ID
       skuSearch: '',          // 本店 SKU 名称/编码模糊搜索
+      matrixMode: 'store',    // 'store' | 'product'
+      productPage: 1,
+      productQuery: '',
       snapshot: null,
       error: null,
       fetchSeq: 0
@@ -669,18 +825,20 @@
     var staleEl = document.getElementById('stale-banner');
 
     function attachChartHover(root) {
-      root.querySelectorAll('[data-chart="sku"] circle').forEach(function (c) {
+      root.querySelectorAll('[data-chart] circle').forEach(function (c) {
         c.addEventListener('mouseenter', function () {
-          var chart = c.closest('[data-chart="sku"]');
+          var chart = c.closest('[data-chart]');
           if (!chart) return;
           var tip = chart.querySelector('.tip');
           if (!tip) return;
+          var chartType = chart.getAttribute('data-chart');
+          var fmt = chartType === 'rate' ? fmtRate : fmtUnits;
           tip.style.display = 'block';
           tip.innerHTML = '<b>' + esc(c.getAttribute('data-series')) + '</b><br>' +
-            esc(c.getAttribute('data-month')) + ' · ' + fmtUnits(c.getAttribute('data-value'));
+            esc(c.getAttribute('data-month')) + ' · ' + fmt(Number(c.getAttribute('data-value')));
         });
         c.addEventListener('mousemove', function (e) {
-          var chart = c.closest('[data-chart="sku"]');
+          var chart = c.closest('[data-chart]');
           var tip = chart && chart.querySelector('.tip');
           if (!tip) return;
           var r = chart.getBoundingClientRect();
@@ -688,7 +846,7 @@
           tip.style.top = (e.clientY - r.top - 40) + 'px';
         });
         c.addEventListener('mouseleave', function () {
-          var chart = c.closest('[data-chart="sku"]');
+          var chart = c.closest('[data-chart]');
           var tip = chart && chart.querySelector('.tip');
           if (tip) tip.style.display = 'none';
         });
@@ -831,7 +989,8 @@
 
     document.addEventListener('input', function (e) {
       var target = e.target;
-      if (!target || !target.getAttribute || target.getAttribute('data-bind') !== 'sku-search') return;
+      if (!target || !target.getAttribute) return;
+      if (target.getAttribute('data-bind') !== 'sku-search') return;
       state.skuSearch = target.value || '';
       var shop = state.snapshot ? findShop(state.snapshot, state.shop) : null;
       var visible = [];
@@ -863,13 +1022,43 @@
       }
     });
 
+    document.addEventListener('submit', function (e) {
+      var form = e.target && e.target.closest ? e.target.closest('[data-bind="product-search"]') : null;
+      if (!form) return;
+      e.preventDefault();
+      var input = form.querySelector('[data-bind="product-query"]');
+      state.productQuery = input ? input.value.trim() : '';
+      state.productPage = 1;
+      render();
+    });
+
     document.addEventListener('click', function (e) {
       var el = e.target.closest ? e.target.closest('[data-bind]') : null;
       if (!el) return;
       var bind = el.getAttribute('data-bind');
 
+      if (bind === 'matrix-mode') {
+        state.matrixMode = el.getAttribute('data-mode') === 'product' ? 'product' : 'store';
+        state.shop = null;
+        state.month = null;
+        state.productPage = 1;
+        state.productQuery = '';
+        render();
+        return;
+      }
+      if (bind === 'product-page') {
+        var delta = Number(el.getAttribute('data-delta')) || 0;
+        state.productPage = (state.productPage || 1) + delta;
+        render();
+        return;
+      }
       if (bind === 'nav') {
-        state.view = el.getAttribute('data-view') || 'all';
+        var newView = el.getAttribute('data-view') || 'all';
+        if (newView !== state.view) {
+          state.productPage = 1;
+          state.productQuery = '';
+        }
+        state.view = newView;
         state.shop = null;
         state.month = null;
         render();
@@ -930,6 +1119,7 @@
   if (typeof module !== 'undefined') {
     module.exports = {
       fmtUnits: fmtUnits,
+      fmtRate: fmtRate,
       esc: esc,
       matchesSkuSearch: matchesSkuSearch,
       monthLabel: monthLabel,
@@ -939,7 +1129,9 @@
       renderMatrixHtml: renderMatrixHtml,
       renderDetailHtml: renderDetailHtml,
       renderLineChartHtml: renderLineChartHtml,
-      renderAftersaleHtml: renderAftersaleHtml
+      renderAftersaleHtml: renderAftersaleHtml,
+      aggregateProductMonths: aggregateProductMonths,
+      renderProductMonthsHtml: renderProductMonthsHtml
     };
   }
 })();

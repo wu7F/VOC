@@ -74,6 +74,15 @@ table.sk th:nth-child(4),table.sk td:nth-child(4),table.sk th:nth-child(5),table
 .diag summary{cursor:pointer;font-weight:600}
 .diag ul{margin:8px 0 0 18px;padding:0}
 @media (max-width:760px){.side{grid-template-columns:1fr}.nav{border-right:0;border-bottom:1px solid var(--line)}.nav button{display:inline-block;width:auto}.kpis,.cols{grid-template-columns:1fr}}
+.matrix-mode{display:flex;gap:8px;margin-bottom:14px}
+.matrix-mode button{border:1px solid var(--line);background:var(--bg);color:var(--ink2);padding:5px 12px;border-radius:6px;font:inherit;cursor:pointer}.matrix-mode button.on{background:var(--fill);color:var(--ink);font-weight:600}
+.product-intro{font-size:12px;color:var(--muted);margin-bottom:10px}.product-controls{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}.product-controls form{display:flex;gap:8px;align-items:center;flex:1;min-width:0}.product-controls label{font-size:12px;color:var(--muted)}.product-controls input[type=search]{flex:1;min-width:140px;max-width:100%;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}.product-controls button{border:1px solid var(--line);background:var(--bg);color:var(--ink2);border-radius:6px;padding:5px 12px;font:inherit;cursor:pointer;font-size:13px}.product-controls button:disabled{opacity:.5;cursor:not-allowed}
+.product-page-nav{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.product-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.product-card{min-width:0}
+.product-card .chart svg{width:100%;height:auto;display:block;overflow:visible}
+.product-details{margin-top:8px}.product-details summary{font-size:12px;font-weight:600;cursor:pointer}.product-table-wrap{max-width:100%;min-width:0;overflow-x:auto}.product-month-table{width:100%;min-width:0;border-collapse:collapse;font-size:12px;margin-top:6px}.product-month-table th,.product-month-table td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}.product-month-table th:first-child,.product-month-table td:first-child{text-align:left}.product-month-table th{color:var(--muted);font-weight:500}.all-gap{font-size:12px;color:var(--muted);margin:6px 0 0}
+@media (max-width:760px){.product-cards{grid-template-columns:1fr}.product-controls{flex-direction:column;align-items:stretch}}
 </style>
 </head>
 <body>
