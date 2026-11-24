@@ -106,73 +106,6 @@
           <div class="file-list" id="fileList"></div>
         </div>
 
-        <div class="card fs-card" id="cardFeishu" hidden>
-          <div class="card-head">
-            <div class="card-title">飞书数据源 <em class="fs-tag">自动更新</em></div>
-            <div class="card-sub">配置一次，之后看板随飞书表格自动刷新，无需再上传文件　·　
-              <a href="/feishu-guide.html" target="_blank" class="fs-guide-link">❓ 如何配置？</a></div>
-          </div>
-
-          <div id="fsSourceList" class="fs-srclist"></div>
-          <details class="fs-creds">
-            <summary>销量表（售后率分母）</summary>
-            <label class="field"><span>飞书电子表格工作表链接</span>
-              <input type="text" id="fsSalesUrl" class="fs-input" placeholder="粘贴包含 sheet= 的工作表链接；留空停用">
-            </label>
-            <label class="field"><span>销量所属平台</span><select id="fsSalesPlatform"><option value="AmazonCs">Amazon 售后</option><option value="WayfairCs">Wayfair 售后</option></select></label>
-            <p>第一行依次为：店铺、SKU、日期、销量件数。销量表用于所选平台；表中没有的店铺保持无率。</p>
-            <label><input type="checkbox" id="fsSalesWrite"> 易仓同步完成后覆盖写入（Amazon 售后）</label>
-            <label><input type="checkbox" id="fsSalesAuto"> 每月自动同步易仓并写表（服务需持续运行）</label>
-            <div class="fs-src-acts">
-              <button class="btn-ghost" id="btnFsSalesSave">保存销量表</button>
-              <button class="btn-ghost" id="btnFsSalesRead">读取销量表</button>
-            </div>
-            <p id="fsSalesState" role="status"></p>
-          </details>
-
-          <div class="fs-row">
-            <input type="text" id="fsUrl" class="fs-input"
-                   placeholder="粘贴飞书链接：电子表格 /sheets/xxx、知识库 /wiki/xxx、多维表格 /base/xxx、云空间文件 /file/xxx">
-          </div>
-          <div class="fs-row">
-            <input type="text" id="fsName" class="fs-input" placeholder="数据源名称，如：亚马逊店铺1 · GN品牌售后登记">
-            <select id="fsPlatform" class="fs-input" style="max-width:150px"></select>
-            <select id="fsInterval" class="fs-input" style="max-width:130px" title="自动更新间隔">
-              <option value="30">每 30 分钟</option>
-              <option value="60">每小时</option>
-              <option value="360">每 6 小时</option>
-              <option value="1440" selected>每天</option>
-              <option value="10080">每周</option>
-              <option value="20160">每 2 周</option>
-            </select>
-          </div>
-          <div class="fs-note" id="fsNote">读取后先预览表头，确认「产品 / 是否售后 / 售后原因」三列能被识别再分析。</div>
-
-          <details class="fs-cred">
-            <summary>飞书应用凭证 <span id="fsCredState"></span></summary>
-            <div class="fs-cred-body">
-              <p class="fs-hint">
-                需要一个飞书<strong>自建应用</strong>的 app_id / app_secret，并开通
-                <code>sheets:spreadsheet:readonly</code>（电子表格）或
-                <code>bitable:app:readonly</code>（多维表格）权限，再把目标表格授权给该应用。
-              </p>
-              <div class="fs-row">
-                <input type="text" id="fsAppId" class="fs-input" placeholder="app_id（cli_xxx）">
-                <input type="password" id="fsAppSecret" class="fs-input" placeholder="app_secret">
-                <button class="btn-ghost" id="btnFsSaveCred">保存</button>
-                <button class="btn-ghost" id="btnFsClearCred" title="清除已保存的凭证">清除</button>
-              </div>
-              <p class="fs-hint">若服务器已配置环境变量 VOC_FEISHU_APP_ID / VOC_FEISHU_APP_SECRET，则此处无需填写。</p>
-            </div>
-          </details>
-
-          <div class="fs-actions">
-            <button class="btn-primary" id="btnFsStart" disabled>保存数据源并立即同步</button>
-            <button class="btn-ghost" id="btnFsPreview">先读取预览</button>
-            <span class="run-note" id="fsRunNote"></span>
-          </div>
-        </div>
-
         <div class="card" id="cardConfig">
           <div class="card-head">
             <div class="card-title">2 · 分析配置</div>
@@ -227,6 +160,11 @@
           <div class="demo-list" id="demoList"></div>
         </div>
       </div>
+    </div>
+
+    <!-- ============ 售后 VOC 看板视图 ============ -->
+    <div class="view board-view" id="viewBoard" hidden>
+      <iframe id="boardFrame" title="售后VOC看板" class="board-frame"></iframe>
     </div>
 
     <!-- ============ 进度视图 ============ -->
