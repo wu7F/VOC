@@ -629,6 +629,152 @@
     return -1;
   }
 
+  function renderReasonsHtml(snapshot, account, sku, month) {
+    var reasons = snapshot.aftersale && snapshot.aftersale.reasons;
+    var connected = !!(snapshot.aftersale && snapshot.aftersale.connected && reasons && reasons.connected);
+    var subcategoryItems = (reasons && Array.isArray(reasons.subcategory_items))
+      ? reasons.subcategory_items : [];
+
+    var parentItems = (reasons && Array.isArray(reasons.items) ? reasons.items : []).filter(function (r) {
+      return r && r.account === account && r.sku === sku && r.month === month;
+    });
+
+    return renderReasonSectionHtml({
+      snapshot: snapshot,
+      account: account,
+      sku: sku,
+      month: month,
+      reasons: reasons,
+      connected: connected,
+      parentItems: parentItems,
+      subcategoryItems: subcategoryItems
+    });
+  }
+
+  function renderReasonSectionHtml(ctx) {
+    var account = ctx.account, sku = ctx.sku, month = ctx.month;
+    var connected = ctx.connected;
+    var reasons = ctx.reasons;
+    var parentItems = ctx.parentItems || [];
+    var subcategoryItems = ctx.subcategoryItems || [];
+
+    var message = (reasons && reasons.message) || (ctx.snapshot && ctx.snapshot.aftersale && ctx.snapshot.aftersale.message) ||
+      '售后原因数据暂不可用；未生成占比。';
+
+    if (!connected) {
+      return '<p class="nac">—</p>' +
+        '<div class="warnbox">' + esc(message) + '</div>';
+    }
+
+    if (!parentItems.length) {
+      return '<p class="nac">— 该店铺、SKU、月份没有可归因的售后记录；这不代表缺失记录被按 0 处理。</p>';
+    }
+
+    var h = '<div class="reason-layout">';
+    h += renderReasonPieAndPrimaryTableHtml(parentItems, '售后原因占比');
+    h += '<div class="reason-secondary">';
+    h += '<h4>二级原因明细</h4>';
+    h += '<p>二级原因按关键词归类；未命中不猜测。二级占比为占该一级类别的百分比。</p>';
+    h += '<div class="reason-secondary-list">';
+    h += parentItems.map(function (parent) {
+      var children = subcategoryItems.filter(function (child) {
+        return child && child.account === account && child.sku === sku && child.month === month &&
+          child.category === parent.category;
+      });
+      var title = '<h5>' + esc(parent.category) + '（' + fmtUnits(parent.count) + ' 条 · ' + fmtRate(parent.share) + '）</h5>';
+      if (!children.length) {
+        return '<details class="reason-child"><summary>' + title + '</summary>' +
+          '<p class="nac">二级原因未接入</p>' +
+          '</details>';
+      }
+      return '<details class="reason-child"><summary>' + title + '</summary>' +
+        '<div class="reason-child-table-wrap"><table class="reason-table reason-child-table">' +
+        '<thead><tr><th>二级类别</th><th>数量</th><th>占一级类别</th></tr></thead><tbody>' +
+        children.map(function (child) {
+          var childShareText = (child.share !== null && child.share !== undefined && isFinite(Number(child.share)))
+            ? fmtRate(child.share)
+            : '—';
+          return '<tr><td>' + esc(child.subcategory) + '</td><td>' + fmtUnits(child.count) + '</td><td>' + childShareText + '</td></tr>';
+        }).join('') +
+        '</tbody></table></div></details>';
+    }).join('');
+    h += '</div></div></div>';
+    return h;
+  }
+
+  function renderReasonPieAndPrimaryTableHtml(allItems, label) {
+    var retained = [];
+    var originalIndexes = [];
+    (allItems || []).forEach(function (r, i) {
+      if (!r || !r.category) return;
+      var countValid = typeof r.count === 'number' && isFinite(r.count) && r.count > 0;
+      var shareValid = typeof r.share === 'number' && isFinite(r.share) && r.share > 0;
+      if (countValid && shareValid) {
+        retained.push(r);
+        originalIndexes.push(i);
+      }
+    });
+
+    var total = 0;
+    retained.forEach(function (r) {
+      total += Number(r.count);
+    });
+
+    var sum = total || 0;
+    var svg = '';
+    if (retained.length && isFinite(sum) && sum > 0) {
+      var W = 220, H = 220, cx = W / 2, cy = H / 2, radius = Math.min(W, H) / 2 - 8;
+      var startAngle = -Math.PI / 2;
+      svg = '<svg class="reason-pie-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(label || 'Reason pie') + '">' +
+        '<title>' + esc(label || 'Reason pie') + '</title>' +
+        '<desc>' + esc(label || '') + '，' + retained.length + ' 个类别，共 ' + fmtUnits(sum) + ' 条</desc>';
+      retained.forEach(function (r, idx) {
+        var count = Number(r.count);
+        var share = Number(r.share);
+        var angle = count / sum * Math.PI * 2;
+        var endAngle = startAngle + angle;
+        var largeArc = angle > Math.PI ? 1 : 0;
+        var x1 = cx + radius * Math.cos(startAngle);
+        var y1 = cy + radius * Math.sin(startAngle);
+        var x2 = cx + radius * Math.cos(endAngle);
+        var y2 = cy + radius * Math.sin(endAngle);
+        var colorIndex = originalIndexes[idx];
+        var pathD;
+        if (retained.length === 1) {
+          pathD = 'M ' + cx.toFixed(2) + ' ' + (cy - radius).toFixed(2) + ' A ' + radius.toFixed(2) + ' ' + radius.toFixed(2) + ' 0 1 1 ' + cx.toFixed(2) + ' ' + (cy + radius).toFixed(2) + ' A ' + radius.toFixed(2) + ' ' + radius.toFixed(2) + ' 0 1 1 ' + cx.toFixed(2) + ' ' + (cy - radius).toFixed(2) + ' Z';
+        } else {
+          pathD = 'M ' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ' L ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' A ' + radius.toFixed(2) + ' ' + radius.toFixed(2) + ' 0 ' + largeArc + ' 1 ' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' Z';
+        }
+        svg += '<path d="' + pathD + '" fill="' + esc(color(colorIndex)) + '" stroke="var(--bg)" stroke-width="2">' +
+          '<title>' + esc(r.category) + ' ' + fmtUnits(count) + ' 条（' + fmtRate(share) + '）</title>' +
+          '</path>';
+        startAngle = endAngle;
+      });
+      svg += '</svg>';
+    } else {
+      svg = '<div class="reason-pie-empty">—</div>';
+    }
+
+    var table = '<table class="reason-table reason-primary-table"><thead><tr><th>一级类别</th><th>数量</th><th>占售后原因</th></tr></thead><tbody>';
+    (allItems || []).forEach(function (r, i) {
+      if (!r || !r.category) return;
+      table += '<tr><td><span class="dot" style="background:' + esc(color(i)) + '"></span>' + esc(r.category) + '</td>' +
+        '<td>' + fmtUnits(r.count) + '</td><td>' + fmtRate(r.share) + '</td></tr>';
+    });
+    table += '</tbody></table>';
+
+    return '<div class="reason-pie-and-table">' +
+      '<div class="reason-pie-wrap">' + svg + '</div>' +
+      '<div class="reason-primary-table-wrap">' + table + '</div>' +
+      '</div>';
+  }
+
+  function renderReasonPieHtml(items, label) {
+    // Kept for compatibility; new render path uses renderReasonPieAndPrimaryTableHtml.
+    return renderReasonPieAndPrimaryTableHtml(items, label);
+  }
+
+
   function renderDetailHtml(snapshot, state) {
     state = state || {};
     var months = snapshot.months || [];
@@ -767,19 +913,19 @@
     var reasonItems = reasons && Array.isArray(reasons.items) ? reasons.items.filter(function (r) {
       return r && r.account === shop.account && r.sku === sku.sku && r.month === month;
     }) : [];
-    if (aftersaleConnected && reasons && reasons.connected && reasonItems.length) {
-      h += '<p>' + esc(shop.account) + ' · ' + esc(month) + ' · 当前SKU 的售后原因占比；仅显示服务端汇总类别，不显示原文。</p>';
-      h += '<table class="sk"><thead><tr><th>归因类别</th><th>数量</th><th>占比</th></tr></thead><tbody>';
-      reasonItems.forEach(function (r) {
-        h += '<tr><td>' + esc(r.category) + '</td><td>' + fmtUnits(r.count) + '</td><td>' + fmtRate(r.share) + '</td></tr>';
-      });
-      h += '</tbody></table>';
-    } else if (aftersaleConnected && reasons && reasons.connected) {
-      h += '<p class="nac">该店铺、SKU、月份没有可归因的售后记录；这不代表缺失记录被按 0 处理。</p>';
-    } else {
-      h += '<div class="warnbox">' + esc((reasons && reasons.message) || (snapshot.aftersale && snapshot.aftersale.message) ||
-        '售后原因数据暂不可用；未生成占比。') + '</div>';
-    }
+    var reasonsConnected = !!(aftersaleConnected && reasons && reasons.connected);
+    h += '<p>' + esc(shop.account) + ' · ' + esc(month) + ' · 当前SKU 的售后原因占比；仅显示服务端汇总类别，不显示原文。</p>';
+    h += renderReasonSectionHtml({
+      snapshot: snapshot,
+      account: shop.account,
+      sku: sku.sku,
+      month: month,
+      reasons: reasons,
+      connected: reasonsConnected,
+      parentItems: reasonItems,
+      subcategoryItems: (reasons && Array.isArray(reasons.subcategory_items)) ? reasons.subcategory_items : [],
+      scopeLabel: shop.account + ' · ' + month + ' · 当前SKU'
+    });
     h += '</div>';
 
     // ③ 真实销量折线
@@ -1164,6 +1310,8 @@
       renderDetailHtml: renderDetailHtml,
       renderLineChartHtml: renderLineChartHtml,
       renderAftersaleHtml: renderAftersaleHtml,
+      renderReasonsHtml: renderReasonsHtml,
+      renderReasonPieHtml: renderReasonPieHtml,
       aggregateProductMonths: aggregateProductMonths,
       renderProductMonthsHtml: renderProductMonthsHtml
     };

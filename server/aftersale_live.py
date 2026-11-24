@@ -15,6 +15,7 @@ from pathlib import Path
 from .bitable_board import fetch_records, fetch_fields, BoardError
 from .aftersale import _reason_category
 from .aftersale_teams import TEAM_MEMBERS
+from .reason_detail import reason_subcategory
 
 UTC8 = timezone(timedelta(hours=8), "Asia/Shanghai")
 
@@ -290,6 +291,7 @@ def _empty_result(fetched_at, diagnostics):
         "reasons": {
             "connected": False,
             "items": None,
+            "subcategory_items": None,
             "message": "售后原因数据暂不可用；未生成占比。",
         },
         "diagnostics": diagnostics,
@@ -416,6 +418,7 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
     num_by_store_sku = {}         # (account, sku) -> count
     reason_by_store_sku = {}      # (account, sku, category) -> count
     reason_by_store_sku_month = {}  # (account, sku, month, category) -> count
+    reason_detail_counter = {}      # (account, sku, month, category, subcategory) -> count
     max_month = None
 
     diag_counts = {
@@ -543,11 +546,15 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         key_s = (account, matched_sku)
         num_by_store_sku[key_s] = num_by_store_sku.get(key_s, 0) + 1
 
-        category = _reason_category(_text(raw_text)) or "未注明原因"
+        raw_text_str = _text(raw_text)
+        category = _reason_category(raw_text_str) or "未注明原因"
+        subcategory = reason_subcategory(category, raw_text_str)
         key_r = (account, matched_sku, category)
         reason_by_store_sku[key_r] = reason_by_store_sku.get(key_r, 0) + 1
         key_rm = (account, matched_sku, assigned_month, category)
         reason_by_store_sku_month[key_rm] = reason_by_store_sku_month.get(key_rm, 0) + 1
+        key_sm_detail = (account, matched_sku, assigned_month, category, subcategory)
+        reason_detail_counter[key_sm_detail] = reason_detail_counter.get(key_sm_detail, 0) + 1
 
         if max_month is None or assigned_month > max_month:
             max_month = assigned_month
@@ -643,6 +650,21 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
             "share": share,
         })
 
+    # subcategory_items: additive read-only child breakdown; share is percent of PARENT category
+    subcategory_items = []
+    for (account, sku, month, category, subcategory), cnt in sorted(reason_detail_counter.items()):
+        parent_total = reason_by_store_sku_month.get((account, sku, month, category), 0)
+        sub_share = round(cnt * 100.0 / parent_total, 4) if parent_total > 0 else None
+        subcategory_items.append({
+            "account": account,
+            "sku": sku,
+            "month": month,
+            "category": category,
+            "subcategory": subcategory,
+            "count": cnt,
+            "share": sub_share,
+        })
+
     # summary
     total_n = sum(num_by_store_sku.values())
     total_d = sum(den_by_store_sku.values())
@@ -683,6 +705,7 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         "reasons": {
             "connected": True,
             "items": reasons_items,
+            "subcategory_items": subcategory_items,
             "message": "原因占比按当前SKU、店铺和月份展示；只返回聚合类别和数量。",
         },
         "diagnostics": diagnostics,
@@ -718,7 +741,7 @@ def load(token, app_token, pair_map, sales_snapshot, http=None,
             "stores": [],
             "store_month": [],
             "sku_store_month": [],
-            "reasons": {"connected": False, "items": None},
+            "reasons": {"connected": False, "items": None, "subcategory_items": None},
             "diagnostics": [{
                 "level": "error",
                 "code": "load_failed",
