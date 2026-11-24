@@ -1071,20 +1071,42 @@
       var cls = d.level === 'error' ? 'bad' : (d.level === 'warning' ? 'warn' : 'nac');
       lines.push('<li class="' + cls + '">[' + esc(d.level) + '] ' + esc(d.message) + '</li>');
     });
-    // 未配对 SKU 诊断
-    var unpairedSkus = [];
+    // 未配对 SKU 明细（按 Team 分组，作为附加说明）
+    var detailGroups = [];
     (snapshot.teams || []).forEach(function (t) {
-      if (t.unpaired_skus && t.unpaired_skus.length) unpairedSkus = unpairedSkus.concat(t.unpaired_skus);
+      var items = [];
+      if (Array.isArray(t.unpaired_sku_totals)) {
+        items = t.unpaired_sku_totals;
+      } else if ((t.unpaired_skus || []).length) {
+        items = t.unpaired_skus.slice().sort().map(function (sku) {
+          return { sku: sku, units: null, known_qty: 0, has_unknown: true };
+        });
+      }
+      if (!items.length) return;
+      var sorted = items.slice().sort(function (a, b) {
+        if (a.has_unknown !== b.has_unknown) return a.has_unknown ? 1 : -1;
+        if (a.units !== null && b.units !== null && a.units !== b.units) return b.units - a.units;
+        return a.sku < b.sku ? -1 : (a.sku > b.sku ? 1 : 0);
+      });
+      var lis = sorted.map(function (item) {
+        if (item.has_unknown) {
+          var note = item.known_qty > 0 ? '，已知 ' + fmtUnits(item.known_qty) + ' 件' : '';
+          var text = Array.isArray(t.unpaired_sku_totals) ? '—' : '件数未提供';
+          return '<li>' + esc(item.sku) + '（' + text + note + '）</li>';
+        }
+        return '<li>' + esc(item.sku) + '（' + fmtUnits(item.units) + ' 件）</li>';
+      }).join('');
+      detailGroups.push('<li>' + esc(t.name) + '：<ul>' + lis + '</ul></li>');
     });
-    if (unpairedSkus.length) {
-      lines.push('<li class="warn">未配对 SKU：' + unpairedSkus.map(function (sku) {
-        return esc(sku.sku) + '（' + fmtUnits(sku.units) + ' 件）';
-      }).join('；') + '</li>');
+    var detailHtml = '';
+    if (detailGroups.length) {
+      detailHtml = '<details><summary>未配对 SKU 明细（按 Team）</summary><ul>' +
+        detailGroups.join('') + '</ul></details>';
     }
-    if (!lines.length) return '';
-    var count = (snapshot.diagnostics || []).length + unmapped.length + unpairedSkus.length;
+    if (!lines.length && !detailHtml) return '';
+    var count = (snapshot.diagnostics || []).length + (unmapped.length ? 1 : 0);
     return '<details class="diag"><summary>数据诊断（' + count + '）</summary><ul>' +
-      lines.join('') + '</ul></details>';
+      lines.join('') + '</ul>' + detailHtml + '</details>';
   }
 
   function initBoard() {

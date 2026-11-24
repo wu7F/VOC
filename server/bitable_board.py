@@ -975,6 +975,7 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
     rows_by_account: dict[str, list[dict]] = {}
     unmapped_rows: list[dict] = []
     unpaired_by_team: dict[str, dict] = {}  # team -> {"units": int|None, "skus": set}
+    unpaired_sku_totals_by_team: dict[str, dict[str, dict]] = {}  # team -> sku -> totals
 
     for r in amazon_rows:
         acc_norm = shop_filter.norm(r["account"])
@@ -1023,8 +1024,14 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
                 "has_unknown": False,
                 "skus": set(),
             })
+            sku_totals = unpaired_sku_totals_by_team.setdefault(team_name, {})
+            sku_total = sku_totals.setdefault(r["sku"], {
+                "known_qty": 0,
+                "has_unknown": False,
+            })
             if r.get("invalid"):
                 unpaired["has_unknown"] = True
+                sku_total["has_unknown"] = True
                 diag.append({
                     "level": "warning",
                     "code": "unpaired_invalid",
@@ -1034,6 +1041,7 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
                 qty = r.get("qty")
                 if qty is not None:
                     unpaired["known_qty"] = unpaired.get("known_qty", 0) + qty
+                    sku_total["known_qty"] = sku_total["known_qty"] + qty
             unpaired["skus"].add(r["sku"])
             continue
 
@@ -1090,12 +1098,23 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
             "has_unknown": team_has_unknown,
             "skus": team_skus_sorted,
         }
+        unpaired_sku_totals = []
+        for sku, totals in sorted(unpaired_sku_totals_by_team.get(team_name, {}).items()):
+            known_qty = totals["known_qty"]
+            has_unknown = totals["has_unknown"]
+            unpaired_sku_totals.append({
+                "sku": sku,
+                "units": known_qty if not has_unknown else None,
+                "known_qty": known_qty,
+                "has_unknown": has_unknown,
+            })
         teams_output.append({
             "name": team_name,
             "shops": shops,
             "unpaired_units": unpaired_units,
             "unpaired_skus": team_skus_sorted,
             "unpaired": unpaired_info,
+            "unpaired_sku_totals": unpaired_sku_totals,
         })
         global_unpaired_by_team[team_name] = {
             "units": unpaired_units,
