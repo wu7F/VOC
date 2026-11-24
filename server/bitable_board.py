@@ -25,6 +25,7 @@ from pathlib import Path
 
 from . import feishu
 from . import shop_filter
+from . import component_sales
 
 UTC8 = timezone(timedelta(hours=8), "Asia/Shanghai")
 
@@ -84,7 +85,7 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 30.0
 
-CACHE_VERSION = "v3_aftersale_live"
+CACHE_VERSION = "v4_component_min"
 
 # 本地确认快照（只读，非实时）。缺失文件时售后保持未接入。
 AFTERSALE_SNAPSHOT_PATH = Path(__file__).resolve().parent / "aftersale_snapshot.json"
@@ -802,8 +803,10 @@ def _build_shop(account: str, account_rows: list[dict], months: list[str],
     """构建单个店铺的快照。
 
     account_rows 已经保证属于此账号且仅包含配对 SKU（若 pair_map 提供）。
-    确认零 SKU 将按规则补缺，但不计入店铺级月汇总真实已知量。
+    在构造 sku_map 前会调用 component_sales.merge_component_rows 将已准入的组件别名
+    规范化为 canonical 产品行；确认零 SKU 将按规则补缺，但不计入店铺级月汇总真实已知量。
     """
+    account_rows = component_sales.merge_component_rows(account_rows, pair_map, diagnostics)
     # 取 display_name
     display_name = ""
     for r in account_rows:
@@ -976,6 +979,7 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
     unmapped_rows: list[dict] = []
     unpaired_by_team: dict[str, dict] = {}  # team -> {"units": int|None, "skus": set}
     unpaired_sku_totals_by_team: dict[str, dict[str, dict]] = {}  # team -> sku -> totals
+    merged_sku_totals_by_team: dict[str, dict[str, dict[str, object]]] = {}  # team -> alias sku -> audit totals
 
     for r in amazon_rows:
         acc_norm = shop_filter.norm(r["account"])
@@ -1016,6 +1020,24 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
                 continue
 
         team_name = account_team[acc_norm]
+        # 组件别名：仅当 pair_map 提供且目标在 pair_map 中才并入
+        alias_target = component_sales.COMPONENT_ALIASES.get(r["sku"]) if pair_map is not None else None
+        if alias_target is not None and alias_target in pair_map:
+            merged_totals = merged_sku_totals_by_team.setdefault(team_name, {})
+            audit = merged_totals.setdefault(r["sku"], {
+                "target_sku": alias_target,
+                "known_qty": 0,
+                "has_unknown": False,
+            })
+            if r.get("invalid"):
+                audit["has_unknown"] = True
+            else:
+                qty = r.get("qty")
+                if qty is not None:
+                    audit["known_qty"] = audit["known_qty"] + qty
+            rows_by_account.setdefault(acc_norm, []).append(r)
+            continue
+
         # 配对过滤：若 pair_map 提供，只保留配对 SKU
         if pair_map is not None and r["sku"] not in pair_map:
             # 未配对 SKU 计入未配对统计，区分已知/未知
@@ -1108,6 +1130,17 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
                 "known_qty": known_qty,
                 "has_unknown": has_unknown,
             })
+        merged_sku_totals = []
+        for sku, totals in sorted(merged_sku_totals_by_team.get(team_name, {}).items()):
+            known_qty = totals["known_qty"]
+            has_unknown = totals["has_unknown"]
+            merged_sku_totals.append({
+                "sku": sku,
+                "target_sku": totals["target_sku"],
+                "units": known_qty if not has_unknown else None,
+                "known_qty": known_qty,
+                "has_unknown": has_unknown,
+            })
         teams_output.append({
             "name": team_name,
             "shops": shops,
@@ -1115,6 +1148,7 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
             "unpaired_skus": team_skus_sorted,
             "unpaired": unpaired_info,
             "unpaired_sku_totals": unpaired_sku_totals,
+            "merged_sku_totals": merged_sku_totals,
         })
         global_unpaired_by_team[team_name] = {
             "units": unpaired_units,
@@ -1295,17 +1329,20 @@ def get_board(app_id, app_secret, *, refresh=False, now_fn=None, http=None, cach
             live_aftersale["sales_source_as_of"] = snapshot["fetched_at"]
             if live_aftersale.get("connected") is not True:
                 old = cache.get(key)
-                old_aftersale = (old.get("snapshot") or {}).get("aftersale") if old else None
+                old_snapshot = old.get("snapshot") if old else None
+                old_aftersale = (old_snapshot or {}).get("aftersale") if old_snapshot else None
                 if isinstance(old_aftersale, dict) and old_aftersale.get("connected") is True:
-                    live_aftersale = copy.deepcopy(old_aftersale)
-                    live_aftersale["stale"] = True
-                    live_aftersale["error"] = "售后源刷新失败，正在显示上次成功数据。"
-                    snapshot["stale"] = True
-                    snapshot["error"] = "售后源刷新失败，正在显示上次成功数据。"
-                    snapshot["last_success_at"] = (
-                        old["snapshot"].get("last_success_at") or
-                        old["snapshot"].get("fetched_at")
+                    snap = copy.deepcopy(old_snapshot)
+                    aftersale = snap.get("aftersale") or {}
+                    aftersale["stale"] = True
+                    aftersale["error"] = "售后源刷新失败，正在显示上次成功数据。"
+                    snap["stale"] = True
+                    snap["error"] = "售后源刷新失败，正在显示上次成功数据。"
+                    snap["last_success_at"] = (
+                        old_snapshot.get("last_success_at") or
+                        old_snapshot.get("fetched_at")
                     )
+                    return snap
             snapshot["aftersale"] = live_aftersale
             # Cache only a fresh, fully validated successful sales snapshot. If
             # the aftersale refresh failed and its own result is stale/unknown,

@@ -1098,15 +1098,37 @@
       }).join('');
       detailGroups.push('<li>' + esc(t.name) + '：<ul>' + lis + '</ul></li>');
     });
+    var mergedGroups = [];
+    (snapshot.teams || []).forEach(function (t) {
+      var items = t.merged_sku_totals || [];
+      if (!items.length) return;
+      var sorted = items.slice().sort(function (a, b) {
+        if (a.has_unknown !== b.has_unknown) return a.has_unknown ? 1 : -1;
+        if (a.units !== null && b.units !== null && a.units !== b.units) return b.units - a.units;
+        return a.sku < b.sku ? -1 : (a.sku > b.sku ? 1 : 0);
+      });
+      var lis = sorted.map(function (item) {
+        var label = item.has_unknown
+          ? (item.known_qty > 0 ? '已并入 ' + fmtUnits(item.known_qty) + ' 件（有未知）' : '已并入（件数未知）')
+          : '已并入 ' + fmtUnits(item.units) + ' 件';
+        return '<li>' + esc(item.sku) + ' → ' + esc(item.target_sku) + '（' + label + '）</li>';
+      }).join('');
+      mergedGroups.push('<li>' + esc(t.name) + '：<ul>' + lis + '</ul></li>');
+    });
+    var mergedHtml = '';
+    if (mergedGroups.length) {
+      mergedHtml = '<details><summary>已并入 SKU（组件原始件数）</summary><ul>' +
+        mergedGroups.join('') + '</ul></details>';
+    }
     var detailHtml = '';
     if (detailGroups.length) {
       detailHtml = '<details><summary>未配对 SKU 明细（按 Team）</summary><ul>' +
         detailGroups.join('') + '</ul></details>';
     }
-    if (!lines.length && !detailHtml) return '';
+    if (!lines.length && !detailHtml && !mergedHtml) return '';
     var count = (snapshot.diagnostics || []).length + (unmapped.length ? 1 : 0);
     return '<details class="diag"><summary>数据诊断（' + count + '）</summary><ul>' +
-      lines.join('') + '</ul>' + detailHtml + '</details>';
+      lines.join('') + '</ul>' + detailHtml + mergedHtml + '</details>';
   }
 
   function initBoard() {
