@@ -170,10 +170,8 @@
   function renderNavHtml(state) {
     state = state || {};
     var sections = [
-      ['总览', [['all', '全部']]],
-      ['AMAZON', [['Team 1', 'Team 1'], ['Team 2', 'Team 2'], ['Team 3', 'Team 3']]],
-      ['WAYFAIR', [['Wayfair', '未接入']]],
-      ['独立站', [['Independent', '未接入']]]
+      ['概览', [['all', 'Amazon 概览'], ['Wayfair', 'Wayfair 概览'], ['Independent', '独立站概览']]],
+      ['AMAZON', [['Team 1', 'Team 1'], ['Team 2', 'Team 2'], ['Team 3', 'Team 3']]]
     ];
     return sections.map(function (sec) {
       var h = '<small>' + esc(sec[0]) + '</small>';
@@ -276,6 +274,106 @@
     return { connected: connected, catalog_available: catalogAvailable, items: items, names: names };
   }
 
+  function aggregateProductReasons(snapshot, sku, month) {
+    var connected = !!(snapshot && snapshot.aftersale && snapshot.aftersale.connected &&
+      snapshot.aftersale.reasons && snapshot.aftersale.reasons.connected);
+    if (!connected || !snapshot || !sku || !month) {
+      return { connected: connected, items: [], subcategory_items: [] };
+    }
+    var teamAccounts = Object.create(null);
+    if (Array.isArray(snapshot.teams)) {
+      snapshot.teams.forEach(function (t) {
+        if (t && (t.name === 'Team 1' || t.name === 'Team 2' || t.name === 'Team 3')) {
+          (t.shops || []).forEach(function (s) {
+            if (s && s.account) teamAccounts[s.account] = true;
+          });
+        }
+      });
+    }
+    var primary = Object.create(null);
+    var secondary = Object.create(null);
+    var items = Array.isArray(snapshot.aftersale.reasons.items) ? snapshot.aftersale.reasons.items : [];
+    var subcategoryItems = Array.isArray(snapshot.aftersale.reasons.subcategory_items) ? snapshot.aftersale.reasons.subcategory_items : [];
+    items.forEach(function (r) {
+      if (!r || !teamAccounts[r.account] || String(r.sku) !== String(sku) || String(r.month) !== String(month)) return;
+      if (!r.category || typeof r.count !== 'number' || !isFinite(r.count) || r.count <= 0) return;
+      primary[r.category] = (primary[r.category] || 0) + r.count;
+    });
+    subcategoryItems.forEach(function (r) {
+      if (!r || !teamAccounts[r.account] || String(r.sku) !== String(sku) || String(r.month) !== String(month)) return;
+      if (!r.category || !r.subcategory || typeof r.count !== 'number' || !isFinite(r.count) || r.count <= 0) return;
+      var k = JSON.stringify([r.category, r.subcategory]);
+      secondary[k] = (secondary[k] || 0) + r.count;
+    });
+    var total = 0;
+    Object.keys(primary).forEach(function (category) {
+      var count = primary[category];
+      if (typeof count === 'number' && isFinite(count) && count > 0) total += count;
+    });
+    var primaryOut = Object.keys(primary).map(function (category) {
+      var count = primary[category];
+      var share = total > 0 ? count / total * 100 : 0;
+      return { category: category, count: count, share: share };
+    }).sort(function (a, b) { return b.share - a.share; });
+    var secondaryOut = Object.keys(secondary).map(function (k) {
+      var parts = JSON.parse(k);
+      var category = parts[0];
+      var subcategory = parts[1];
+      var count = secondary[k];
+      var parentCount = primary[category] || 0;
+      var share = parentCount > 0 ? count / parentCount * 100 : 0;
+      return { category: category, subcategory: subcategory, count: count, share: share };
+    }).sort(function (a, b) {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return b.share - a.share;
+    });
+    return { connected: true, items: primaryOut, subcategory_items: secondaryOut };
+  }
+
+  function renderProductReasonTooltipHtml(snapshot, sku, month) {
+    var aggregated = aggregateProductReasons(snapshot, sku, month);
+    var productName = '';
+    if (snapshot && Array.isArray(snapshot.products)) {
+      snapshot.products.forEach(function (p) {
+        if (p && String(p.sku) === String(sku)) productName = p.display_name || '';
+      });
+    }
+    var displayName = productName && productName !== sku ? productName + '（' + sku + '）' : sku;
+    var rateVal = null;
+    var productMonths = aggregateProductMonths(snapshot);
+    productMonths.items.forEach(function (item) {
+      if (String(item.sku) === String(sku) && item.months[month]) rateVal = item.months[month].rate;
+    });
+    var h = '<div class="product-tip-content"><b>' + esc(displayName) + '</b><br>' +
+      esc(month) + ' · 售后率 ' + fmtRate(rateVal) + '<br>';
+    if (!aggregated.connected || !aggregated.items.length) {
+      h += '<span class="nac">—</span>';
+      if (!aggregated.connected && snapshot && snapshot.aftersale && snapshot.aftersale.reasons) {
+        h += '<div class="tip-note">' + esc(snapshot.aftersale.reasons.message || '售后原因未接入') + '</div>';
+      }
+      h += '<button type="button" class="tip-close" aria-label="关闭">×</button></div>';
+      return h;
+    }
+    h += '<div class="tip-reasons">';
+    aggregated.items.forEach(function (r) {
+      h += '<div>' + esc(r.category) + '：' + fmtRate(r.share) + '</div>';
+      var children = aggregated.subcategory_items.filter(function (c) {
+        return c.category === r.category;
+      });
+      if (children.length) {
+        h += '<details class="tip-child"><summary>二级原因（占该一级类别）</summary><div class="tip-child-list">';
+        children.forEach(function (c) {
+          h += '<div>' + esc(c.subcategory) + '：' + fmtRate(c.share) + '（' + fmtUnits(c.count) + ' 条）</div>';
+        });
+        h += '</div></details>';
+      } else {
+        h += '<div class="tip-child nac">二级原因未接入</div>';
+      }
+    });
+    h += '</div><button type="button" class="tip-close" aria-label="关闭">×</button></div>';
+    return h;
+  }
+
   function renderProductMonthsHtml(snapshot, state) {
     state = state || {};
     var aggregated = aggregateProductMonths(snapshot);
@@ -314,7 +412,7 @@
     if (!pageItems.length) {
       return controls + '<div class="warnbox">搜索没有匹配的 SKU，请清除搜索条件后重试</div>';
     }
-    var h = '<div class="product-intro">产品×月份：全部亚马逊，不随 Team 筛选；固定2026年4–11月；销量0保留0，分母为0或未知时售后率为—且折线留空；有销量且无售后才是0%。</div>';
+    var h = '<div class="product-intro">产品×月份：全部亚马逊，不随 Team 筛选；固定2026年4–11月；销量0保留0，分母为0或未知时售后率为—且折线留空；有销量且无售后才是0%。悬停或点击数据点查看售后原因，按 Esc 关闭悬停提示。</div>';
     if (!aggregated.connected) {
       h += '<div class="warnbox">售后分子和原因尚未接入多维表格，售后率显示“—”，不按 0% 计算</div>';
     }
@@ -334,8 +432,8 @@
       var displayName = (metadataName && metadataName !== item.sku) ? metadataName + '（' + item.sku + '）' : item.sku;
       var label = '全部亚马逊 ' + displayName + ' 售后率折线图';
       h += '<div class="card product-card"><h3>' + esc(displayName) + '</h3>' +
-        '<div class="chart" data-chart="rate">' +
-        renderLineChartHtml(series, months, { fmt: fmtRate, label: label }) +
+        '<div class="chart" data-chart="rate" data-product-chart="1" data-sku="' + esc(item.sku) + '">' +
+        renderLineChartHtml(series, months, { fmt: fmtRate, label: label, product: true }) +
         '</div>' +
         '<details class="diag product-details"><summary>查看月度明细</summary>' +
         '<div class="product-table-wrap"><table class="product-month-table"><thead><tr><th>月份</th><th>售后件数</th><th>销量（已知）</th><th>售后率</th></tr></thead><tbody>' +
@@ -401,16 +499,18 @@
     });
     var totalUnpairedDisplay = hasUnknownUnpaired ? null : totalUnpaired;
 
-    var h = renderKpis(snapshot, state.matrixMode === 'product' ? 'all' : state.view);
-    h += '<div class="matrix-mode"><button type="button" data-bind="matrix-mode" data-mode="store" class="' +
-      (state.matrixMode !== 'product' ? 'on' : '') + '">店铺×月份</button>' +
-      '<button type="button" data-bind="matrix-mode" data-mode="product" class="' +
-      (state.matrixMode === 'product' ? 'on' : '') + '">产品×月份</button></div>';
-    if (state.matrixMode === 'product') {
+    var h = renderKpis(snapshot, state.view);
+    if (state.view === 'all') {
+      h += '<div class="matrix-mode"><button type="button" data-bind="matrix-mode" data-mode="store" class="' +
+        (state.matrixMode !== 'product' ? 'on' : '') + '">店铺×月份</button>' +
+        '<button type="button" data-bind="matrix-mode" data-mode="product" class="' +
+        (state.matrixMode === 'product' ? 'on' : '') + '">产品×月份</button></div>';
+    }
+    if (state.view === 'all' && state.matrixMode === 'product') {
       h += renderProductMonthsHtml(snapshot, state);
       return h;
     }
-    h += '<div class="matrix-summary"><strong>' + (state.view === 'all' ? '全部' : esc(state.view)) +
+    h += '<div class="matrix-summary"><strong>' + (state.view === 'all' ? 'Amazon 概览' : esc(state.view)) +
       '</strong> · 产品销量分母：' + fmtUnits(totalKnown) +
       ' · 未配对数量：' + fmtUnits(totalUnpairedDisplay) +
       (snapshot.unpaired ? '（全局未配对 ' + fmtUnits(snapshot.unpaired.total_units) + '）' : '') +
@@ -598,13 +698,15 @@
       }
       (s.values || []).forEach(function (v, i) {
         if (v === null || v === undefined) return;
+        var isProduct = opts.product;
         h += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="' +
           (s.dim ? 2.5 : 4) + '" fill="' + esc(s.color) + '" opacity="' +
           (s.dim ? 0.5 : 1) + '" data-series="' + esc(s.name) + '" data-i="' + i +
-          '" data-month="' + esc(months[i]) + '" data-value="' + v + '"/>';
+          '" data-month="' + esc(months[i]) + '" data-value="' + v + '"' +
+          (isProduct ? ' tabindex="0" role="button" aria-label="' + esc(s.name + ' ' + months[i] + ' 售后率 ' + fmtRate(v)) + '"' : '') + '/>';
       });
     });
-    h += '</svg><div class="tip"></div>';
+    h += '</svg><div class="tip' + (opts.product ? ' product-tip' : '') + '"></div>';
     return h;
   }
 
@@ -1004,11 +1106,74 @@
     var bannerEl = document.getElementById('banner');
     var staleEl = document.getElementById('stale-banner');
 
+    var pinnedProductTip = null;
+
+    function hideProductTip(chart) {
+      if (!chart) return;
+      var tip = chart.querySelector('.tip.product-tip');
+      if (!tip) return;
+      tip.style.display = 'none';
+      tip.classList.remove('pinned');
+      if (pinnedProductTip === tip) pinnedProductTip = null;
+    }
+
+    function pinProductTip(tip) {
+      if (!tip) return;
+      unpinProductTip();
+      tip.style.display = 'block';
+      tip.classList.add('pinned');
+      pinnedProductTip = tip;
+    }
+
+    function unpinProductTip() {
+      if (pinnedProductTip) {
+        pinnedProductTip.classList.remove('pinned');
+        if (pinnedProductTip.style.display !== 'none') {
+          pinnedProductTip.style.display = 'none';
+        }
+      }
+      pinnedProductTip = null;
+    }
+
+    function showProductTipFromCircle(circle, pin) {
+      var chart = circle.closest('[data-product-chart]');
+      if (!chart) return;
+      var tip = chart.querySelector('.tip.product-tip');
+      if (!tip) return;
+      if (pinnedProductTip && pinnedProductTip !== tip) {
+        unpinProductTip();
+      }
+      var sku = chart.getAttribute('data-sku');
+      var month = circle.getAttribute('data-month');
+      tip.innerHTML = renderProductReasonTooltipHtml(state.snapshot, sku, month);
+      tip.style.display = 'block';
+      if (pin) {
+        pinProductTip(tip);
+      } else if (pinnedProductTip !== tip) {
+        tip.classList.remove('pinned');
+      }
+      var chartRect = chart.getBoundingClientRect();
+      var circleRect = circle.getBoundingClientRect();
+      var tipRect = tip.getBoundingClientRect();
+      var left = circleRect.left - chartRect.left + circleRect.width + 12;
+      if (left + tipRect.width > chartRect.width - 8) {
+        left = circleRect.left - chartRect.left - tipRect.width - 12;
+        if (left < 8) left = Math.max(8, chartRect.width - tipRect.width - 8);
+      }
+      tip.style.left = left + 'px';
+      tip.style.top = Math.max(0, circleRect.top - chartRect.top - 10) + 'px';
+    }
+
     function attachChartHover(root) {
       root.querySelectorAll('[data-chart] circle').forEach(function (c) {
         c.addEventListener('mouseenter', function () {
           var chart = c.closest('[data-chart]');
           if (!chart) return;
+          var isProduct = chart.hasAttribute('data-product-chart');
+          if (isProduct) {
+            showProductTipFromCircle(c, false);
+            return;
+          }
           var tip = chart.querySelector('.tip');
           if (!tip) return;
           var chartType = chart.getAttribute('data-chart');
@@ -1019,7 +1184,8 @@
         });
         c.addEventListener('mousemove', function (e) {
           var chart = c.closest('[data-chart]');
-          var tip = chart && chart.querySelector('.tip');
+          if (!chart || chart.hasAttribute('data-product-chart')) return;
+          var tip = chart.querySelector('.tip');
           if (!tip) return;
           var r = chart.getBoundingClientRect();
           tip.style.left = (e.clientX - r.left + 12) + 'px';
@@ -1027,13 +1193,63 @@
         });
         c.addEventListener('mouseleave', function () {
           var chart = c.closest('[data-chart]');
-          var tip = chart && chart.querySelector('.tip');
+          if (!chart) return;
+          if (chart.hasAttribute('data-product-chart')) return;
+          var tip2 = chart.querySelector('.tip');
+          if (tip2) tip2.style.display = 'none';
+        });
+        c.addEventListener('focus', function () {
+          if (c.closest('[data-product-chart]')) showProductTipFromCircle(c, false);
+        });
+        c.addEventListener('click', function (e) {
+          if (!c.closest('[data-product-chart]')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          showProductTipFromCircle(c, true);
+        });
+        c.addEventListener('keydown', function (e) {
+          if (!c.closest('[data-product-chart]')) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            showProductTipFromCircle(c, true);
+          } else if (e.key === 'Escape') {
+            var chart = c.closest('[data-product-chart]');
+            hideProductTip(chart);
+          }
+        });
+      });
+      root.querySelectorAll('[data-product-chart]').forEach(function (chart) {
+        chart.addEventListener('mouseleave', function () {
+          var tip = chart.querySelector('.tip.product-tip');
+          if (tip && pinnedProductTip !== tip && !tip.matches(':hover')) hideProductTip(chart);
+        });
+        chart.addEventListener('focusout', function (e) {
+          if (pinnedProductTip) return;
+          if (chart.contains(e.relatedTarget)) return;
+          var tip = chart.querySelector('.tip.product-tip');
           if (tip) tip.style.display = 'none';
+        });
+        chart.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('.tip-close')) {
+            e.preventDefault();
+            e.stopPropagation();
+            hideProductTip(chart);
+          }
         });
       });
     }
 
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      unpinProductTip();
+      mainEl.querySelectorAll('.tip.product-tip').forEach(function (tip) {
+        tip.style.display = 'none';
+        tip.classList.remove('pinned');
+      });
+    });
+
     function render() {
+      unpinProductTip();
       navEl.innerHTML = renderNavHtml(state);
       if (!state.snapshot) {
         bannerEl.innerHTML = '<span class="live"><i></i><span>暂无数据</span></span>';
@@ -1218,11 +1434,14 @@
       var bind = el.getAttribute('data-bind');
 
       if (bind === 'matrix-mode') {
-        state.matrixMode = el.getAttribute('data-mode') === 'product' ? 'product' : 'store';
+        var newMode = el.getAttribute('data-mode') === 'product' ? 'product' : 'store';
+        if (newMode === 'product' && state.view !== 'all') return;
+        state.matrixMode = newMode;
         state.shop = null;
         state.month = null;
         state.productPage = 1;
         state.productQuery = '';
+        unpinProductTip();
         render();
         return;
       }
@@ -1234,13 +1453,13 @@
       }
       if (bind === 'nav') {
         var newView = el.getAttribute('data-view') || 'all';
-        if (newView !== state.view && state.matrixMode !== 'product') {
-          state.productPage = 1;
-          state.productQuery = '';
-        }
+        if (newView !== 'all') state.matrixMode = 'store';
         state.view = newView;
         state.shop = null;
         state.month = null;
+        state.productPage = 1;
+        state.productQuery = '';
+        unpinProductTip();
         render();
         return;
       }
@@ -1313,7 +1532,9 @@
       renderReasonsHtml: renderReasonsHtml,
       renderReasonPieHtml: renderReasonPieHtml,
       aggregateProductMonths: aggregateProductMonths,
-      renderProductMonthsHtml: renderProductMonthsHtml
+      renderProductMonthsHtml: renderProductMonthsHtml,
+      aggregateProductReasons: aggregateProductReasons,
+      renderProductReasonTooltipHtml: renderProductReasonTooltipHtml
     };
   }
 })();

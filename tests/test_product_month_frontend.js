@@ -206,13 +206,14 @@ t('placeholders remain empty, all product mode renders the global catalogue', ()
   assert.ok(!html.includes('KPI'));
   html = board.renderMatrixHtml(snap, { view: 'all', matrixMode: 'product' });
   assert.ok(!html.includes('请选择') && html.includes('<svg') && html.includes('全部亚马逊'));
-  assert.strictEqual(html, board.renderMatrixHtml(snap, { view: 'Team 1', matrixMode: 'product' }));
+  const teamHtml = board.renderMatrixHtml(snap, { view: 'Team 1', matrixMode: 'product' });
+  assert.ok(!teamHtml.includes('product-card') && !teamHtml.includes('data-mode="product"'));
 });
 
 t('disconnected retains catalogue charts as gaps and warning', () => {
   const snap = makeSnapshot();
   snap.aftersale.connected = false;
-  const html = board.renderMatrixHtml(snap, { view: 'Team 1', matrixMode: 'product' });
+  const html = board.renderMatrixHtml(snap, { view: 'all', matrixMode: 'product' });
   assert.ok(html.includes('warnbox'));
   assert.ok(html.includes('<svg') && !html.includes('<circle'));
 });

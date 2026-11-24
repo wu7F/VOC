@@ -193,8 +193,8 @@ async function createBoard(initialQueue = []) {
     assert(board.elements.main.innerHTML.includes('data-bind="matrix-cell"'), 'Initial view should retain store matrix');
     passed++;
 
-    // Switch to Team 1 view, then product matrix mode
-    await board.click({ 'data-bind': 'nav', 'data-view': 'Team 1' });
+    // Product matrix is available only in Amazon overview.
+    await board.click({ 'data-bind': 'nav', 'data-view': 'all' });
     await board.click({ 'data-bind': 'matrix-mode', 'data-mode': 'product' });
     let products = board.elements.main.innerHTML;
     for (let i = 1; i <= 6; i++) {
@@ -247,26 +247,28 @@ async function createBoard(initialQueue = []) {
     }
     passed++;
 
-    // Team selection does not change global product query or data scope.
+    // Team selection leaves product mode; stale mode events cannot reopen it.
     await board.submit('SKU13');
     await board.click({ 'data-bind': 'nav', 'data-view': 'Team 2' });
     products = board.elements.main.innerHTML;
-    assert(products.includes('SKU13') && products.includes('value="SKU13"'), 'Global query persists across Team selection');
-    assert(products.includes('第 1 / 1 页'), 'Filtered global catalogue remains one page');
-    const beforeAll = products;
+    assert(!products.includes('product-card') && !products.includes('data-mode="product"'), 'Team only shows store matrix');
+    await board.click({ 'data-bind': 'matrix-mode', 'data-mode': 'product' });
+    assert(!board.elements.main.innerHTML.includes('product-card'), 'Forged product mode event ignored');
     await board.click({ 'data-bind': 'nav', 'data-view': 'all' });
-    assert.strictEqual(board.elements.main.innerHTML, beforeAll, 'All view renders the same global products, never a Team prompt');
+    await board.click({ 'data-bind': 'matrix-mode', 'data-mode': 'product' });
+    assert(board.elements.main.innerHTML.includes('product-card'), 'Amazon overview can reopen products');
     passed++;
 
     // Placeholder navigation must not display Amazon charts or product controls.
     await board.click({ 'data-bind': 'nav', 'data-view': 'Independent' });
     products = board.elements.main.innerHTML;
     assert(products.includes('未接入') && !products.includes('<svg') && !products.includes('product-card'));
-    // Back to Team1, product mode retained.
-    await board.click({ 'data-bind': 'nav', 'data-view': 'Team 1' });
+    // Back to Amazon overview, product mode can be selected again.
+    await board.click({ 'data-bind': 'nav', 'data-view': 'all' });
+    await board.click({ 'data-bind': 'matrix-mode', 'data-mode': 'product' });
     await board.submit('');
     products = board.elements.main.innerHTML;
-    assert(products.includes('SKU01') && products.includes('SKU06'), 'Team1 product matrix page1 restored');
+    assert(products.includes('SKU01') && products.includes('SKU06'), 'Amazon product matrix page1 restored');
     assert(products.includes('<svg'), 'Product view should contain actual SVG charts');
     passed++;
 
@@ -302,11 +304,13 @@ async function createBoard(initialQueue = []) {
     const rateTip = { style: {}, innerHTML: '' };
     const salesTip = { style: {}, innerHTML: '' };
     const rateChart = {
+      hasAttribute: () => false,
       getAttribute: (attr) => attr === 'data-chart' ? 'rate' : null,
       querySelector: (sel) => sel === '.tip' ? rateTip : null,
       getBoundingClientRect: () => ({ left: 0, top: 0 })
     };
     const salesChart = {
+      hasAttribute: () => false,
       getAttribute: (attr) => attr === 'data-chart' ? 'sku' : null,
       querySelector: (sel) => sel === '.tip' ? salesTip : null,
       getBoundingClientRect: () => ({ left: 0, top: 0 })
@@ -340,8 +344,8 @@ async function createBoard(initialQueue = []) {
       return [];
     };
 
-    // Trigger actual render via nav Team 1 (same view still renders)
-    await board.click({ 'data-bind': 'nav', 'data-view': 'Team 1' });
+    // Trigger actual render in the same Amazon product view.
+    await board.click({ 'data-bind': 'nav', 'data-view': 'all' });
     await flush();
 
     // Invoke mouseenter on each circle and assert tips
