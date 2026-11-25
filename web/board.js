@@ -43,8 +43,21 @@
   function teamShops(snapshot, view) {
     if (!snapshot || !snapshot.teams) return [];
     if (!view || view === 'all') return snapshot.teams;
-    if (view === 'Wayfair') return [];
+    if (view === 'Wayfair') return snapshot.teams.filter(function (t) { return t.name === 'Wayfair'; });
     return snapshot.teams.filter(function (t) { return t.name === view; });
+  }
+
+  function currentSnapshot(state) {
+    if (!state) return null;
+    return state.view === 'Wayfair' ? state.wayfairSnapshot : state.snapshot;
+  }
+
+  function snapshotPlatform(snapshot) {
+    return snapshot && snapshot.platform === 'Wayfair' ? 'Wayfair' : 'Amazon';
+  }
+
+  function isWayfairSnapshot(snapshot) {
+    return snapshotPlatform(snapshot) === 'Wayfair';
   }
 
   function matchesSkuSearch(sku, query) {
@@ -77,7 +90,7 @@
     return '';
   }
 
-  function amazonKnown(snapshot) {
+  function knownUnits(snapshot) {
     var total = 0;
     (snapshot.teams || []).forEach(function (t) {
       (t.shops || []).forEach(function (s) {
@@ -138,7 +151,9 @@
   }
 
   function renderKpis(snapshot, view) {
-    var known = amazonKnown(snapshot);
+    var platform = snapshotPlatform(snapshot);
+    var isWf = platform === 'Wayfair';
+    var known = knownUnits(snapshot);
     var gap = gapShopCount(snapshot);
     var aftersale = snapshot.aftersale || {};
     var aftersaleRate = '—';
@@ -156,8 +171,23 @@
         aftersaleRate = fmtRate(aftersale.total.rate);
       }
     }
-    var aftersaleMessage = (snapshot.aftersale && snapshot.aftersale.message) ||
-      '售后分子和原因尚未接入多维表格,售后率显示“—”,不按 0% 计算';
+    var aftersaleMessage;
+    if (isWf) {
+      aftersaleMessage = (snapshot.aftersale && snapshot.aftersale.message) ||
+        '售后率和原因来自已批准归并，未接入时显示—，不按 0% 计算';
+    } else {
+      aftersaleMessage = (snapshot.aftersale && snapshot.aftersale.message) ||
+        '售后分子和原因尚未接入多维表格,售后率显示“—”,不按 0% 计算';
+    }
+    if (isWf) {
+      return '<div class="kpis">' +
+        '<div class="kpi"><small>Wayfair 已知销量合计</small><strong>' + fmtUnits(known) +
+        '</strong><span>仅已归属 Wayfair玺家 的已知销量</span></div>' +
+        '<div class="kpi"><small>Wayfair 售后率</small><strong>' + esc(aftersaleRate) +
+        '</strong><span>' + esc(aftersaleMessage) + '</span></div>' +
+        '<div class="kpi"><small>有缺口的店铺数</small><strong>' + gap +
+        '</strong><span>存在缺失月份或不完整格</span></div></div>';
+    }
     return '<div class="kpis">' +
       '<div class="kpi"><small>Amazon 已知销量合计</small><strong>' + fmtUnits(known) +
       '</strong><span>仅已归属 Team 的已知销量</span></div>' +
@@ -200,6 +230,16 @@
       return skuMap[sku];
     }
 
+    var wayfair = snapshotPlatform(snapshot) === 'Wayfair';
+    var allowedTeams = wayfair ? { 'Wayfair': true } : { 'Team 1': true, 'Team 2': true, 'Team 3': true };
+    var allowedMonths = (snapshot && Array.isArray(snapshot.months) && snapshot.months.length)
+      ? snapshot.months.slice().sort()
+      : (wayfair ? [] : ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11']);
+    function monthAllowed(month) {
+      if (wayfair) return allowedMonths.indexOf(month) >= 0;
+      return month >= '2026-04' && month <= '2026-11';
+    }
+
     if (catalogAvailable) {
       snapshot.products.forEach(function (product) {
         if (!product || product.t01 === true || !product.sku) return;
@@ -211,7 +251,7 @@
 
     if (Array.isArray(snapshot && snapshot.teams)) {
       snapshot.teams.forEach(function (t) {
-        if (!t || (t.name !== 'Team 1' && t.name !== 'Team 2' && t.name !== 'Team 3')) return;
+        if (!t || !allowedTeams[t.name]) return;
         var shops = Array.isArray(t.shops) ? t.shops : [];
         shops.forEach(function (shop) {
           var skus = Array.isArray(shop && shop.skus) ? shop.skus : [];
@@ -222,7 +262,7 @@
             var skuRec = skuMap[sku];
             if (!s.sold || typeof s.sold !== 'object') return;
             Object.keys(s.sold).forEach(function (month) {
-              if (month < '2026-04' || month > '2026-11') return;
+              if (!monthAllowed(month)) return;
               var val = Number(s.sold[month]);
               if (typeof s.sold[month] === 'number' && isFinite(val) && val >= 0) {
                 skuRec.sales[month] = (skuRec.sales[month] || 0) + val;
@@ -242,13 +282,18 @@
       return typeof val === 'number' && isFinite(val) && val >= 0;
     }
     rows.forEach(function (r) {
-      if (!r || (r.team !== 'Team 1' && r.team !== 'Team 2' && r.team !== 'Team 3')) return;
+      if (!r) return;
+      if (wayfair) {
+        if (r.team !== 'Wayfair') return;
+      } else {
+        if (r.team !== 'Team 1' && r.team !== 'Team 2' && r.team !== 'Team 3') return;
+      }
       var sku = r.sku;
       var month = r.month;
       if (!sku || !month) return;
       sku = String(sku);
       month = String(month);
-      if (month < '2026-04' || month > '2026-11') return;
+      if (!monthAllowed(month)) return;
       if (!skuMap[sku]) return;
       if (!isValidCount(r.numerator) || !isValidCount(r.denominator)) return;
       var n = Number(r.numerator);
@@ -280,10 +325,12 @@
     if (!connected || !snapshot || !sku || !month) {
       return { connected: connected, items: [], subcategory_items: [] };
     }
+    var wayfair = snapshotPlatform(snapshot) === 'Wayfair';
+    var allowedTeams = wayfair ? { 'Wayfair': true } : { 'Team 1': true, 'Team 2': true, 'Team 3': true };
     var teamAccounts = Object.create(null);
     if (Array.isArray(snapshot.teams)) {
       snapshot.teams.forEach(function (t) {
-        if (t && (t.name === 'Team 1' || t.name === 'Team 2' || t.name === 'Team 3')) {
+        if (t && allowedTeams[t.name]) {
           (t.shops || []).forEach(function (s) {
             if (s && s.account) teamAccounts[s.account] = true;
           });
@@ -376,8 +423,12 @@
 
   function renderProductMonthsHtml(snapshot, state) {
     state = state || {};
+    var wayfair = snapshotPlatform(snapshot) === 'Wayfair';
+    var months = wayfair
+      ? ((snapshot && snapshot.months) || []).slice().sort()
+      : ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+    if (!months.length) return '<div class="warnbox">暂无月份数据</div>';
     var aggregated = aggregateProductMonths(snapshot);
-    var months = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
     var allItems = aggregated.items || [];
     var query = state.productQuery || '';
     var filtered = allItems.filter(function (item) {
@@ -407,14 +458,19 @@
       '<button type="button" data-bind="product-page" data-delta="1"' +
       (page >= pages ? ' disabled' : '') + '>下一页</button></div></div>';
     if (!allItems.length) {
-      return controls + '<div class="warnbox">配对表没有可展示的亚马逊产品</div>';
+      return controls + (wayfair ? '<div class="warnbox">配对表没有可展示的 Wayfair 产品</div>' : '<div class="warnbox">配对表没有可展示的亚马逊产品</div>');
     }
     if (!pageItems.length) {
       return controls + '<div class="warnbox">搜索没有匹配的 SKU，请清除搜索条件后重试</div>';
     }
-    var h = '<div class="product-intro">产品×月份：全部亚马逊，不随 Team 筛选；固定2026年4–11月；销量0保留0，分母为0或未知时售后率为—且折线留空；有销量且无售后才是0%。悬停或点击数据点查看售后原因，按 Esc 关闭悬停提示。</div>';
+    var intro = wayfair
+      ? '<div class="product-intro">产品×月份：Wayfair/玺家；月份随 Wayfair 快照明细动态展示；销量0保留0，分母为0或未知时售后率为—且折线留空；有销量且无售后才是0%。悬停或点击数据点查看售后原因，按 Esc 关闭悬停提示。</div>'
+      : '<div class="product-intro">产品×月份：全部亚马逊，不随 Team 筛选；固定2026年4–11月；销量0保留0，分母为0或未知时售后率为—且折线留空；有销量且无售后才是0%。悬停或点击数据点查看售后原因，按 Esc 关闭悬停提示。</div>';
+    var h = intro;
     if (!aggregated.connected) {
-      h += '<div class="warnbox">售后分子和原因尚未接入多维表格，售后率显示“—”，不按 0% 计算</div>';
+      h += '<div class="warnbox">' + (wayfair
+        ? '售后率和原因来自已批准归并，未接入时显示—，不按 0% 计算'
+        : '售后分子和原因尚未接入多维表格，售后率显示“—”，不按 0% 计算') + '</div>';
     }
     h += controls;
     h += '<div class="product-cards">';
@@ -430,7 +486,7 @@
       }];
       var metadataName = aggregated.names[item.sku];
       var displayName = (metadataName && metadataName !== item.sku) ? metadataName + '（' + item.sku + '）' : item.sku;
-      var label = '全部亚马逊 ' + displayName + ' 售后率折线图';
+      var label = (wayfair ? 'Wayfair ' : '全部亚马逊 ') + displayName + ' 售后率折线图';
       h += '<div class="card product-card"><h3>' + esc(displayName) + '</h3>' +
         '<div class="chart" data-chart="rate" data-product-chart="1" data-sku="' + esc(item.sku) + '">' +
         renderLineChartHtml(series, months, { fmt: fmtRate, label: label, product: true }) +
@@ -462,11 +518,11 @@
   function renderMatrixHtml(snapshot, state) {
     state = state || {};
     if (!snapshot || snapshot.ok === false) return '<div class="warnbox">没有可用数据</div>';
-    if (state.view === 'Wayfair') {
-      var wayfairMessage = (snapshot.wayfair && snapshot.wayfair.message) || 'Wayfair 销量尚未接入';
-      return '<div class="warnbox">Wayfair 销量尚未接入</div><div class="card"><p>' +
-        esc(wayfairMessage) + '</p></div>';
+    var wayfair = snapshotPlatform(snapshot) === 'Wayfair';
+    if (state.view === 'Wayfair' && !wayfair) {
+      return '<div class="warnbox">Wayfair数据未接入</div>';
     }
+    var platform = wayfair ? 'Wayfair' : 'Amazon';
     if (state.view === 'Independent') {
       return '<div class="warnbox">独立站尚未接入</div>';
     }
@@ -500,17 +556,18 @@
     var totalUnpairedDisplay = hasUnknownUnpaired ? null : totalUnpaired;
 
     var h = renderKpis(snapshot, state.view);
-    if (state.view === 'all') {
+    if (state.view === 'all' || state.view === 'Wayfair') {
       h += '<div class="matrix-mode"><button type="button" data-bind="matrix-mode" data-mode="store" class="' +
         (state.matrixMode !== 'product' ? 'on' : '') + '">店铺×月份</button>' +
         '<button type="button" data-bind="matrix-mode" data-mode="product" class="' +
         (state.matrixMode === 'product' ? 'on' : '') + '">产品×月份</button></div>';
     }
-    if (state.view === 'all' && state.matrixMode === 'product') {
+    if ((state.view === 'all' || state.view === 'Wayfair') && state.matrixMode === 'product') {
       h += renderProductMonthsHtml(snapshot, state);
       return h;
     }
-    h += '<div class="matrix-summary"><strong>' + (state.view === 'all' ? 'Amazon 概览' : esc(state.view)) +
+    var summaryTitle = state.view === 'all' ? 'Amazon 概览' : (wayfair ? 'Wayfair 概览' : esc(state.view));
+    h += '<div class="matrix-summary"><strong>' + summaryTitle +
       '</strong> · 产品销量分母：' + fmtUnits(totalKnown) +
       ' · 未配对数量：' + fmtUnits(totalUnpairedDisplay) +
       (snapshot.unpaired ? '（全局未配对 ' + fmtUnits(snapshot.unpaired.total_units) + '）' : '') +
@@ -522,8 +579,11 @@
     teams.forEach(function (team) {
       var teamKnown = 0;
       (team.shops || []).forEach(function (s) { teamKnown += s.units_known || 0; });
-      h += '<tr class="g"><td colspan="' + (months.length + 2) + '">Amazon · ' +
-        esc(team.name) + ' · 分母 ' + fmtUnits(teamKnown) +
+      var teamLabel = (wayfair && team.shops && team.shops.length)
+        ? (team.shops[0].display_name || team.shops[0].account)
+        : team.name;
+      h += '<tr class="g"><td colspan="' + (months.length + 2) + '">' + esc(platform) + ' · ' +
+        esc(teamLabel) + ' · 分母 ' + fmtUnits(teamKnown) +
         ' · 未配对 ' + fmtUnits(team.unpaired_units) + '</td></tr>';
       (team.shops || []).forEach(function (shop) {
         var missing = 0;
@@ -564,33 +624,49 @@
 
   function renderAftersaleHtml(snapshot, state) {
     var aftersale = snapshot && snapshot.aftersale;
+    var wayfair = snapshotPlatform(snapshot) === 'Wayfair';
     if (!aftersale || !aftersale.connected) {
       return '<div class="card"><h3>售后率（确认快照）</h3>' +
         '<div class="warnbox">' +
-        esc((aftersale && aftersale.message) ||
-          '售后分子和原因尚未接入多维表格,售后率显示“—”,不按 0% 计算') +
+        esc((aftersale && aftersale.message) || (wayfair
+          ? '售后率和原因来自已批准归并，未接入时显示—，不按 0% 计算'
+          : '售后分子和原因尚未接入多维表格,售后率显示“—”,不按 0% 计算')) +
         '</div></div>';
     }
     var h = '<div class="card"><h3>售后率（只读实时聚合）</h3>' +
       '<p>' + esc(aftersale.message || '') +
       (aftersale.source_as_of ? ' 数据截至 ' + esc(aftersale.source_as_of) + '。' : '') +
-      ' 分母来自当前同一批只读销量快照，过滤未配对SKU和T01。</p>';
+      (wayfair ? ' 分母来自当前同一批只读 Wayfair 销量快照，过滤未配对 SKU，仅保留 Wayfair 已配对产品。' :
+        ' 分母来自当前同一批只读销量快照，过滤未配对SKU和T01。') + '</p>';
 
-    // Team 汇总
-    h += '<table class="sk"><thead><tr><th>Team</th><th>售后分子</th><th>销量分母</th><th>售后率</th></tr></thead><tbody>';
-    (aftersale.teams || []).forEach(function (t) {
-      h += '<tr><td>' + esc(t.name) + '</td><td>' + fmtUnits(t.numerator) +
-        '</td><td>' + fmtUnits(t.denominator) + '</td><td>' + fmtRate(t.rate) + '</td></tr>';
-    });
-    if (aftersale.total) {
-      h += '<tr style="font-weight:600"><td>合计</td><td>' + fmtUnits(aftersale.total.numerator) +
-        '</td><td>' + fmtUnits(aftersale.total.denominator) + '</td><td>' +
-        fmtRate(aftersale.total.rate) + '</td></tr>';
+    if (!wayfair) {
+      // Team 汇总 (Amazon only)
+      h += '<table class="sk"><thead><tr><th>Team</th><th>售后分子</th><th>销量分母</th><th>售后率</th></tr></thead><tbody>';
+      (aftersale.teams || []).forEach(function (t) {
+        h += '<tr><td>' + esc(t.name) + '</td><td>' + fmtUnits(t.numerator) +
+          '</td><td>' + fmtUnits(t.denominator) + '</td><td>' + fmtRate(t.rate) + '</td></tr>';
+      });
+      if (aftersale.total) {
+        h += '<tr style="font-weight:600"><td>合计</td><td>' + fmtUnits(aftersale.total.numerator) +
+          '</td><td>' + fmtUnits(aftersale.total.denominator) + '</td><td>' +
+          fmtRate(aftersale.total.rate) + '</td></tr>';
+      }
+      h += '</tbody></table>';
+    } else {
+      h += '<table class="sk"><thead><tr><th>Wayfair 汇总</th><th>售后分子</th><th>销量分母</th><th>售后率</th></tr></thead><tbody>';
+      var wfTot = aftersale.total || aftersale.summary;
+      if (wfTot) {
+        h += '<tr><td>Wayfair</td><td>' + fmtUnits(wfTot.numerator) +
+          '</td><td>' + fmtUnits(wfTot.denominator) + '</td><td>' + fmtRate(wfTot.rate) + '</td></tr>';
+      } else {
+        h += '<tr><td>Wayfair</td><td>—</td><td>—</td><td>—</td></tr>';
+      }
+      h += '</tbody></table>';
     }
-    h += '</tbody></table>';
 
     // 店铺汇总
-    h += '<h3>店铺售后率</h3><table class="sk"><thead><tr><th>店铺</th><th>Team</th><th>售后分子</th><th>销量分母</th><th>售后率</th></tr></thead><tbody>';
+    h += '<h3>店铺售后率</h3><table class="sk"><thead><tr><th>店铺</th><th>' +
+      (wayfair ? '平台' : 'Team') + '</th><th>售后分子</th><th>销量分母</th><th>售后率</th></tr></thead><tbody>';
     (aftersale.stores || []).forEach(function (s) {
       h += '<tr><td>' + esc(s.account) + '</td><td>' + esc(s.team || '') +
         '</td><td>' + fmtUnits(s.numerator) + '</td><td>' + fmtUnits(s.denominator) +
@@ -639,8 +715,14 @@
       }
     }
 
-    // 售后原因占位
-    h += '<h3>售后原因占比</h3><div class="warnbox">已发现售后表“原文”字段，但当前只读访问拿不到记录字段值；暂不生成占比，避免把缺失数据当作没有原因。</div>';
+    // 售后原因占位 / Wayfair 来源说明
+    if (wayfair) {
+      var reasonsMsg = (aftersale.reasons && aftersale.reasons.message) || aftersale.message ||
+        '一级和二级均来自售后原因字段的已批准归并';
+      h += '<h3>售后原因占比</h3><p>' + esc(reasonsMsg) + '</p>';
+    } else {
+      h += '<h3>售后原因占比</h3><div class="warnbox">已发现售后表“原文”字段，但当前只读访问拿不到记录字段值；暂不生成占比，避免把缺失数据当作没有原因。</div>';
+    }
     h += '</div>';
     return h;
   }
@@ -776,7 +858,11 @@
     h += renderReasonPieAndPrimaryTableHtml(parentItems, '售后原因占比');
     h += '<div class="reason-secondary">';
     h += '<h4>二级原因明细</h4>';
-    h += '<p>二级原因按关键词归类；未命中不猜测。二级占比为占该一级类别的百分比。</p>';
+    if (ctx.snapshot && snapshotPlatform(ctx.snapshot) === 'Wayfair') {
+      h += '<p>一级和二级均来自售后原因字段的已批准归并。二级占比为占该一级类别的百分比。</p>';
+    } else {
+      h += '<p>二级原因按关键词归类；未命中不猜测。二级占比为占该一级类别的百分比。</p>';
+    }
     h += '<div class="reason-secondary-list">';
     h += parentItems.map(function (parent) {
       var children = subcategoryItems.filter(function (child) {
@@ -907,8 +993,9 @@
     var skuDisplayName = sku ? (sku.display_name || '') : '';
     var skuWfPart = sku ? (sku.wf_part_number || '') : '';
 
+    var platform = snapshotPlatform(snapshot);
     var h = '<div class="crumb"><button data-bind="action" data-action="back">← 返回矩阵</button>' +
-      '<span>/</span><span>Amazon · ' + esc(teamName || '') + '</span><span>/</span><b>' +
+      '<span>/</span><span>' + esc(platform) + ' · ' + esc(teamName || '') + '</span><span>/</span><b>' +
       esc(shop.account) + '</b><span>/</span><b>' + esc(month) + '</b></div>';
     h += '<div class="chips">' + months.map(function (m) {
       return '<button data-bind="month-chip" data-month="' + esc(m) + '" class="' +
@@ -1001,11 +1088,18 @@
         (snapshot.aftersale && snapshot.aftersale.source_as_of
           ? ' 数据截至 ' + esc(snapshot.aftersale.source_as_of) + '。' : '') + '</p>';
     } else {
-      h += '<p>售后分子和原因尚未接入多维表格，售后率显示“—”，不按 0% 计算。</p>' +
-        '<div class="warnbox">' +
-        esc((snapshot.aftersale && snapshot.aftersale.message) ||
-          '售后分子和原因尚未接入多维表格,售后率显示“—”,不按 0% 计算') +
-        '</div>';
+      if (snapshotPlatform(snapshot) === 'Wayfair') {
+        var wfMsg = (snapshot.aftersale && snapshot.aftersale.message) ||
+          '售后率和原因来自已批准归并，未接入时显示—，不按 0% 计算';
+        h += '<p>' + esc(wfMsg) + '</p>' +
+          '<div class="warnbox">' + esc(wfMsg) + '</div>';
+      } else {
+        h += '<p>售后分子和原因尚未接入多维表格，售后率显示“—”，不按 0% 计算。</p>' +
+          '<div class="warnbox">' +
+          esc((snapshot.aftersale && snapshot.aftersale.message) ||
+            '售后分子和原因尚未接入多维表格,售后率显示“—”,不按 0% 计算') +
+          '</div>';
+      }
     }
     h += '</div>';
 
@@ -1060,6 +1154,53 @@
 
   function renderDiagnosticsHtml(snapshot) {
     if (!snapshot) return '';
+    if (snapshotPlatform(snapshot) === 'Wayfair') {
+      var diag = (snapshot.diagnostics || []).slice();
+      var diagItems = diag.filter(function (d) { return d && typeof d === 'object'; });
+      var lineHtml = diagItems.map(function (d) {
+        var countText = (typeof d.count === 'number' && isFinite(d.count)) ? fmtUnits(d.count) : '';
+        var text = esc(d.message || d.code || '');
+        if (countText) text += '：' + countText;
+        var cls = 'nac';
+        if (d.level === 'error') cls = 'bad';
+        else if (d.level === 'warning') cls = 'warn';
+        return '<li class="' + cls + '">' + text + '</li>';
+      }).join('');
+      var unpairedSales = (snapshot.unpaired && snapshot.unpaired.sales) || [];
+      var unpairedAftersale = (snapshot.unpaired && snapshot.unpaired.aftersale) || [];
+      var salesHtml = '';
+      var aftersaleHtml = '';
+      if (unpairedSales.length) {
+        var salesTotalUnits = 0;
+        unpairedSales.forEach(function (r) { salesTotalUnits += r.units || 0; });
+        var salesSorted = unpairedSales.slice().sort(function (a, b) {
+          if (a.units !== b.units) return b.units - a.units;
+          return String(a.sku).localeCompare(String(b.sku));
+        });
+        var salesLis = salesSorted.map(function (r) {
+          return '<li>' + esc(r.sku) + '（' + fmtUnits(r.units) + ' 件）</li>';
+        }).join('');
+        salesHtml = '<details><summary>未配对销量 SKU（' + fmtUnits(salesTotalUnits) + ' 件）</summary><ul>' +
+          salesLis + '</ul></details>';
+      }
+      if (unpairedAftersale.length) {
+        var aftersaleTotalRows = 0;
+        unpairedAftersale.forEach(function (r) { aftersaleTotalRows += r.rows || 0; });
+        var aftersaleSorted = unpairedAftersale.slice().sort(function (a, b) {
+          if (a.rows !== b.rows) return b.rows - a.rows;
+          return String(a.sku).localeCompare(String(b.sku));
+        });
+        var aftersaleLis = aftersaleSorted.map(function (r) {
+          return '<li>' + esc(r.sku) + '（' + fmtUnits(r.rows) + ' 行）</li>';
+        }).join('');
+        aftersaleHtml = '<details><summary>未配对售后 SKU（' + fmtUnits(aftersaleTotalRows) + ' 行）</summary><ul>' +
+          aftersaleLis + '</ul></details>';
+      }
+      var wfCount = diagItems.length;
+      if (!lineHtml && !salesHtml && !aftersaleHtml) return '';
+      return '<details class="diag"><summary>Wayfair 数据诊断（' + wfCount + '）</summary>' +
+        (lineHtml ? '<ul>' + lineHtml + '</ul>' : '') + salesHtml + aftersaleHtml + '</details>';
+    }
     var lines = [];
     var unmapped = snapshot.unmapped || [];
     if (unmapped.length) {
@@ -1136,13 +1277,15 @@
       view: 'all',
       shop: null,
       month: null,
-      selectedSku: null,      // 字符串 SKU ID
-      skuSearch: '',          // 本店 SKU 名称/编码模糊搜索
-      matrixMode: 'store',    // 'store' | 'product'
+      selectedSku: null,
+      skuSearch: '',
+      matrixMode: 'store',
       productPage: 1,
       productQuery: '',
       snapshot: null,
       error: null,
+      wayfairSnapshot: null,
+      wayfairError: null,
       fetchSeq: 0
     };
     var navEl = document.getElementById('nav');
@@ -1189,7 +1332,7 @@
       }
       var sku = chart.getAttribute('data-sku');
       var month = circle.getAttribute('data-month');
-      tip.innerHTML = renderProductReasonTooltipHtml(state.snapshot, sku, month);
+      tip.innerHTML = renderProductReasonTooltipHtml(activeSnapshot(), sku, month);
       tip.style.display = 'block';
       if (pin) {
         pinProductTip(tip);
@@ -1292,35 +1435,51 @@
       });
     });
 
+    function activeSnapshot() {
+      return currentSnapshot(state);
+    }
+
+    function activeError() {
+      return state.view === 'Wayfair' ? state.wayfairError : state.error;
+    }
+
     function render() {
       unpinProductTip();
       navEl.innerHTML = renderNavHtml(state);
-      if (!state.snapshot) {
+      if (state.view === 'Independent') {
+        bannerEl.innerHTML = '';
+        staleEl.innerHTML = '';
+        mainEl.innerHTML = '<div class="warnbox">独立站尚未接入</div>';
+        return;
+      }
+      var snap = activeSnapshot();
+      var err = activeError();
+      if (!snap) {
         bannerEl.innerHTML = '<span class="live"><i></i><span>暂无数据</span></span>';
-        staleEl.innerHTML = state.error ?
-          renderStaleHtml(null, (state.error && state.error.message) || String(state.error)) : '';
-        if (state.error) {
+        staleEl.innerHTML = err ?
+          renderStaleHtml(null, (err && err.message) || String(err)) : '';
+        if (err) {
           mainEl.innerHTML = '<div class="warnbox">加载失败：' +
-            esc((state.error && state.error.message) || String(state.error)) +
+            esc((err && err.message) || String(err)) +
             '</div><div class="warnbox"><button data-bind="action" data-action="retry">重试</button></div>';
         } else {
           mainEl.innerHTML = '<div class="warnbox">正在加载多维表格…</div>';
         }
         return;
       }
-      bannerEl.innerHTML = renderBannerHtml(state.snapshot);
-      if (state.error) {
+      bannerEl.innerHTML = renderBannerHtml(snap);
+      if (err) {
         staleEl.innerHTML = renderStaleHtml(
-          (state.error.last_success_at || state.snapshot.last_success_at || state.snapshot.fetched_at),
-          (state.error.message || String(state.error))
+          (err.last_success_at || snap.last_success_at || snap.fetched_at),
+          (err.message || String(err))
         );
       } else {
         staleEl.innerHTML = '';
       }
       var content = state.shop ?
-        renderDetailHtml(state.snapshot, state) :
-        renderMatrixHtml(state.snapshot, state);
-      mainEl.innerHTML = content + renderDiagnosticsHtml(state.snapshot);
+        renderDetailHtml(snap, state) :
+        renderMatrixHtml(snap, state);
+      mainEl.innerHTML = content + renderDiagnosticsHtml(snap);
       attachChartHover(mainEl);
     }
 
@@ -1370,41 +1529,45 @@
       currentState.selectedSku = selected;
     }
 
-    function fetchBoard(refresh) {
+    function handleResponse(r) {
+      if (!r.ok) {
+        return r.json().then(function (data) {
+          var msg = data && (data.error || data.detail || data.message);
+          throw new Error(msg ? 'HTTP ' + r.status + ': ' + msg : 'HTTP ' + r.status);
+        }, function () {
+          throw new Error('HTTP ' + r.status);
+        });
+      }
+      return r.json().catch(function () {
+        throw new Error('看板响应不是 JSON');
+      });
+    }
+
+    function fetchAmazon(refresh) {
       var seq = ++state.fetchSeq;
       fetch(refresh ? '/api/bitable/board?refresh=1' : '/api/bitable/board')
-        .then(function (r) {
-          if (!r.ok) {
-            return r.json().then(function (data) {
-              var msg = data && (data.error || data.detail || data.message);
-              throw new Error(msg ? 'HTTP ' + r.status + ': ' + msg : 'HTTP ' + r.status);
-            }, function () {
-              throw new Error('HTTP ' + r.status);
-            });
-          }
-          return r.json().catch(function () {
-            throw new Error('看板响应不是 JSON');
-          });
-        })
+        .then(handleResponse)
         .then(function (snap) {
-          // 只有最新请求的结果才被处理
           if (seq !== state.fetchSeq) return;
-          // 在写入 state.snapshot 前完成基本结构验证，避免把坏数据放入渲染路径
+          if (state.view === 'Wayfair' || state.view === 'Independent') return;
           validateSnapshotShape(snap);
+          if (snap.platform && snap.platform !== 'Amazon') {
+            var amazonError = { message: '平台数据不匹配：仅能接入Amazon数据' };
+            if (state.snapshot) {
+              amazonError.last_success_at = state.snapshot.last_success_at || state.snapshot.fetched_at;
+            }
+            state.error = amazonError;
+            render();
+            return;
+          }
           state.snapshot = snap;
-
-          // 成功刷新后，按当前店铺的 SKU 身份清理选中状态，防止幽灵 ID
           reconcileSelectedSku(snap, state);
-
-          // 如果当前没有打开店铺，且没有选中 SKU，用第一个店铺的第一个 SKU 作为默认
           if (!state.shop && !state.selectedSku && snap.teams.length) {
             var firstShop = snap.teams[0].shops && snap.teams[0].shops[0];
             if (firstShop && firstShop.skus && firstShop.skus.length) {
               state.selectedSku = firstShop.skus[0].sku;
             }
           }
-
-          // 如果后端标记了 stale 或返回 error，必须保留错误提示，不能当作完全成功
           if (snap.stale || snap.error) {
             state.error = {
               message: snap.error || '数据已过期，显示上次成功数据',
@@ -1417,14 +1580,67 @@
         })
         .catch(function (err) {
           if (seq !== state.fetchSeq) return;
+          if (state.view === 'Wayfair' || state.view === 'Independent') return;
           var errorObj = { message: (err && err.message) ? err.message : String(err) };
           if (state.snapshot) {
             errorObj.last_success_at = state.snapshot.last_success_at || state.snapshot.fetched_at;
           }
           state.error = errorObj;
-          // 保留旧快照，不清空
           render();
         });
+    }
+
+    function fetchWayfair(refresh) {
+      var seq = ++state.fetchSeq;
+      fetch(refresh ? '/api/bitable/wayfair?refresh=1' : '/api/bitable/wayfair')
+        .then(handleResponse)
+        .then(function (snap) {
+          if (seq !== state.fetchSeq) return;
+          if (state.view !== 'Wayfair') return;
+          validateSnapshotShape(snap);
+          if (snap.platform !== 'Wayfair') {
+            var wayfairError = { message: '平台数据不匹配：仅能接入Wayfair数据' };
+            if (state.wayfairSnapshot) {
+              wayfairError.last_success_at = state.wayfairSnapshot.last_success_at || state.wayfairSnapshot.fetched_at;
+            }
+            state.wayfairError = wayfairError;
+            render();
+            return;
+          }
+          state.wayfairSnapshot = snap;
+          reconcileSelectedSku(snap, state);
+          if (!state.shop && !state.selectedSku && snap.teams.length) {
+            var firstShop = snap.teams[0].shops && snap.teams[0].shops[0];
+            if (firstShop && firstShop.skus && firstShop.skus.length) {
+              state.selectedSku = firstShop.skus[0].sku;
+            }
+          }
+          if (snap.stale || snap.error) {
+            state.wayfairError = {
+              message: snap.error || '数据已过期，显示上次成功数据',
+              last_success_at: snap.last_success_at || snap.fetched_at || null
+            };
+          } else {
+            state.wayfairError = null;
+          }
+          render();
+        })
+        .catch(function (err) {
+          if (seq !== state.fetchSeq) return;
+          if (state.view !== 'Wayfair') return;
+          var errorObj = { message: (err && err.message) ? err.message : String(err) };
+          if (state.wayfairSnapshot) {
+            errorObj.last_success_at = state.wayfairSnapshot.last_success_at || state.wayfairSnapshot.fetched_at;
+          }
+          state.wayfairError = errorObj;
+          render();
+        });
+    }
+
+    function fetchActive(refresh) {
+      if (state.view === 'Wayfair') return fetchWayfair(refresh);
+      if (state.view === 'Independent') return;
+      return fetchAmazon(refresh);
     }
 
     document.addEventListener('input', function (e) {
@@ -1432,7 +1648,7 @@
       if (!target || !target.getAttribute) return;
       if (target.getAttribute('data-bind') !== 'sku-search') return;
       state.skuSearch = target.value || '';
-      var shop = state.snapshot ? findShop(state.snapshot, state.shop) : null;
+      var shop = activeSnapshot() ? findShop(activeSnapshot(), state.shop) : null;
       var visible = [];
       var q = state.skuSearch.trim().toLocaleLowerCase();
       if (shop && Array.isArray(shop.skus)) {
@@ -1479,7 +1695,7 @@
 
       if (bind === 'matrix-mode') {
         var newMode = el.getAttribute('data-mode') === 'product' ? 'product' : 'store';
-        if (newMode === 'product' && state.view !== 'all') return;
+        if (newMode === 'product' && state.view !== 'all' && state.view !== 'Wayfair') return;
         state.matrixMode = newMode;
         state.shop = null;
         state.month = null;
@@ -1501,10 +1717,13 @@
         state.view = newView;
         state.shop = null;
         state.month = null;
+        state.selectedSku = null;
+        state.skuSearch = '';
         state.productPage = 1;
         state.productQuery = '';
         unpinProductTip();
         render();
+        fetchActive(false);
         return;
       }
       if (bind === 'matrix-cell') {
@@ -1512,7 +1731,7 @@
         state.month = el.getAttribute('data-month');
         state.skuSearch = '';
         // 设置默认选中第一个 SKU
-        var shop = state.snapshot ? findShop(state.snapshot, state.shop) : null;
+        var shop = activeSnapshot() ? findShop(activeSnapshot(), state.shop) : null;
         if (shop && shop.skus && shop.skus.length) {
           state.selectedSku = shop.skus[0].sku;
         } else {
@@ -1528,7 +1747,7 @@
       }
       if (bind === 'sku-row') {
         var idx = Number(el.getAttribute('data-i'));
-        var shop2 = state.snapshot ? findShop(state.snapshot, state.shop) : null;
+        var shop2 = activeSnapshot() ? findShop(activeSnapshot(), state.shop) : null;
         if (shop2 && shop2.skus && idx >= 0 && idx < shop2.skus.length) {
           state.selectedSku = shop2.skus[idx].sku;
         }
@@ -1543,15 +1762,15 @@
           state.skuSearch = '';
           render();
         } else if (action === 'refresh' || action === 'retry') {
-          fetchBoard(true);
+          fetchActive(true);
         }
         return;
       }
     });
 
-    fetchBoard(false);
+    fetchActive(false);
     setInterval(function () {
-      if (!document.hidden) fetchBoard(false);
+      if (!document.hidden) fetchActive(false);
     }, 30000);
   }
 

@@ -93,7 +93,9 @@ async function createBoard(initialQueue = []) {
       getElementById: id => elements[id],
       addEventListener: (name, handler) => { handlers[name] = handler; }
     },
-    fetch: () => Promise.resolve(queue.shift()),
+    fetch: url => url.startsWith('/api/bitable/wayfair')
+      ? Promise.resolve(response({ ok: false, error: 'Wayfair 销量尚未接入' }))
+      : Promise.resolve(queue.shift()),
     setInterval: () => {},
     module: { exports: {} }
   };
@@ -120,7 +122,7 @@ function ok(cond, msg) {
   ok(navKeys.length === 3, `应恰好 3 个 Team 导航控件，实际 ${navKeys.length}`);
   ok(board.elements.nav.innerHTML.includes('data-view="Independent"'), '导航应包含独立站未接入');
 
-  // 2. Wayfair 未接入占位保留
+  // 2. Wayfair 独立数据源尚不可用时保留错误占位，不借用 Amazon 数据。
   await board.click({ 'data-bind': 'nav', 'data-view': 'Wayfair' });
   ok(board.elements.main.innerHTML.includes('Wayfair 销量尚未接入'), 'Wayfair 应显示未接入占位');
 
