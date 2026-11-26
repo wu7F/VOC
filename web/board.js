@@ -137,6 +137,63 @@
     return null;
   }
 
+  /* Amazon 合计行：仅 Team 1/2/3 售后有效销量分母，排除 T01；缺失即未知 */
+  function aggregateAmazonTotal(snapshot) {
+    var aftersale = snapshot && snapshot.aftersale;
+    if (!aftersale || !aftersale.connected) return null;
+    var teams = snapshot.teams || [];
+    var required = ['Team 1', 'Team 2', 'Team 3'];
+    var accounts = [];
+    var seen = Object.create(null);
+    for (var ti = 0; ti < required.length; ti++) {
+      var team = null;
+      for (var k = 0; k < teams.length; k++) {
+        if (teams[k] && teams[k].name === required[ti]) { team = teams[k]; break; }
+      }
+      if (!team) return null;
+      var shops = Array.isArray(team.shops) ? team.shops : [];
+      if (!shops.length) return null;
+      for (var si = 0; si < shops.length; si++) {
+        var acc = shops[si] && shops[si].account;
+        if (!acc) return null;
+        if (seen[acc]) continue;
+        seen[acc] = true;
+        accounts.push(acc);
+      }
+    }
+    if (!accounts.length) return null;
+    var months = Array.isArray(snapshot.months) ? snapshot.months : [];
+    var rows = aftersale.store_month || [];
+    function validCount(v) {
+      return typeof v === 'number' && isFinite(v) && v >= 0;
+    }
+    var out = { months: {}, cumulative: null };
+    var cumN = 0, cumD = 0, cumKnown = true;
+    months.forEach(function (m) {
+      var n = 0, d = 0, known = true;
+      for (var ai = 0; ai < accounts.length; ai++) {
+        var row = null;
+        for (var ri = 0; ri < rows.length; ri++) {
+          var r = rows[ri];
+          if (r && (r.account || r.store) === accounts[ai] && r.month === m) { row = r; break; }
+        }
+        if (!row || !validCount(row.numerator) || !validCount(row.denominator)) { known = false; break; }
+        n += row.numerator;
+        d += row.denominator;
+      }
+      if (!known) {
+        out.months[m] = { known: false, numerator: null, denominator: null, rate: null };
+        cumKnown = false;
+      } else {
+        out.months[m] = { known: true, numerator: n, denominator: d, rate: d > 0 ? n / d * 100 : null };
+        cumN += n; cumD += d;
+      }
+    });
+    if (cumKnown) out.cumulative = { known: true, numerator: cumN, denominator: cumD };
+    else out.cumulative = { known: false, numerator: null, denominator: null };
+    return out;
+  }
+
   function renderBannerHtml(snapshot) {
     if (!snapshot) return '<span class="live"><i></i><span>暂无数据</span></span>';
     var time = isoClock(snapshot.fetched_at || snapshot.last_success_at);
@@ -576,6 +633,27 @@
     h += '<table class="hm"><thead><tr><th></th>';
     h += months.map(function (m) { return '<th>' + monthLabel(m) + '</th>'; }).join('');
     h += '<th>累计销量（已知）</th></tr></thead><tbody>';
+    if (state.view === 'all' && !wayfair) {
+      var amazonTotal = aggregateAmazonTotal(snapshot);
+      h += '<tr class="amazon-total"><th scope="row" class="n">Amazon 合计</th>';
+      months.forEach(function (m) {
+        var cell = amazonTotal && amazonTotal.months[m];
+        if (!cell || !cell.known) {
+          h += '<td class="rate-na" data-month="' + esc(m) + '" title="快照不完整，无法计算 Amazon 合计">—</td>';
+        } else {
+          var tip = 'Amazon 合计 ' + m + '：售后件数 ' + cell.numerator + ' / 售后有效销量分母 ' + cell.denominator +
+            '（仅 Team 1/2/3 售后有效销量，排除 T01）';
+          h += '<td data-month="' + esc(m) + '" title="' + esc(tip) + '"><span class="amazon-total-rate">' + fmtRate(cell.rate) + '</span><small class="amazon-total-counts">' + cell.numerator + '/' + cell.denominator + '</small></td>';
+        }
+      });
+      var cum = amazonTotal && amazonTotal.cumulative;
+      if (cum && cum.known) {
+        h += '<td class="amazon-total-sales" title="' + esc('Amazon 合计累计：售后件数 ' + cum.numerator + ' / 售后有效销量分母 ' + cum.denominator + '（排除 T01）') + '">' + fmtUnits(cum.denominator) + '</td>';
+      } else {
+        h += '<td class="amazon-total-sales" title="快照不完整，累计分母未知">—</td>';
+      }
+      h += '</tr>';
+    }
     teams.forEach(function (team) {
       var teamKnown = 0;
       (team.shops || []).forEach(function (s) { teamKnown += s.units_known || 0; });
@@ -619,6 +697,9 @@
       '<b style="background:color-mix(in srgb, var(--accent) 45%, var(--fill))"></b>' +
       '<b style="background:color-mix(in srgb, var(--accent) 85%, var(--fill))"></b>' +
       '<span>高售后率 · “—”表示售后率无有效快照或销量缺失 · 点击格子看销量明细</span></div>';
+    if (state.view === 'all' && !wayfair) {
+      h += '<div class="note">Amazon 合计累计销量为售后有效销量分母（排除 T01）；其他销量汇总可能包含 T01。</div>';
+    }
     return h;
   }
 

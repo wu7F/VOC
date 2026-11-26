@@ -911,6 +911,30 @@ table.tbl tr.clickable { cursor: pointer; }
   .topnav button, .topnav button .lbl { transition: none; }
 }
 
+/* Amazon 二级导航 */
+.amazon-tabs {
+  display: flex; gap: 4px; align-items: center;
+  margin: 0 30px 6px; padding: 4px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 99px; width: fit-content; max-width: calc(100% - 60px);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.amazon-tabs::-webkit-scrollbar { display: none; }
+.amazon-tabs button {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 14px; border-radius: 99px;
+  color: var(--text-2); white-space: nowrap; flex: 0 0 auto;
+  font-size: 12.5px; font-weight: 550;
+  transition: background .2s, color .2s;
+}
+.amazon-tabs button:hover { background: rgba(21,24,29,.06); color: var(--text); }
+.amazon-tabs button.on { background: #2f6df6; color: #fff; font-weight: 600; }
+.amazon-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .amazon-tabs button { transition: none; } }
+@media (max-width: 900px) {
+  .amazon-tabs { margin: 0 16px 6px; max-width: calc(100% - 32px); }
+}
+
 /* 内容区大标题 */
 .page-head {
   display: flex; align-items: flex-start; justify-content: space-between;

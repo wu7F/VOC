@@ -534,25 +534,32 @@ function onHashChange() {
   if (target && target !== state.tab && state.result) switchTab(target);
 }
 
-/* 顶部胶囊主导航：七个主入口，选中项显示全名，未选中显示短名 */
+/* 顶部胶囊主导航：四个主入口，选中项显示全名，未选中显示短名 */
 const NAV_ICONS = {
   prod: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   amazon: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
   wayfair: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
   site: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/>',
-  team: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
 };
 const NAV_ITEMS = [
   { id: 'prod', label: '产品VOC', short: '产品VOC', ic: 'prod' },
   { id: 'amazon', label: 'Amazon 概览', short: 'Amazon', ic: 'amazon' },
   { id: 'wayfair', label: 'Wayfair 概览', short: 'Wayfair', ic: 'wayfair' },
   { id: 'site', label: '独立站概览', short: '独立站', ic: 'site' },
-  { id: 't1', label: 'Team 1', short: 'Team 1', ic: 'team' },
-  { id: 't2', label: 'Team 2', short: 'Team 2', ic: 'team' },
-  { id: 't3', label: 'Team 3', short: 'Team 3', ic: 'team' },
 ];
 
-function navItem(id) { return NAV_ITEMS.find(x => x.id === id) || NAV_ITEMS[0]; }
+/* Amazon 二级导航：Team 1/2/3 归属 Amazon 主入口 */
+const AMAZON_TABS = [
+  { id: 'amazon', label: 'Amazon 概览' },
+  { id: 't1', label: 'Team 1' },
+  { id: 't2', label: 'Team 2' },
+  { id: 't3', label: 'Team 3' },
+];
+const AMAZON_NAV_IDS = { amazon: true, t1: true, t2: true, t3: true };
+
+function navItem(id) {
+  return NAV_ITEMS.find(x => x.id === id) || AMAZON_TABS.find(x => x.id === id) || NAV_ITEMS[0];
+}
 
 function renderTopNav() {
   const box = $('#topnav');
@@ -561,13 +568,35 @@ function renderTopNav() {
     ? document.activeElement.dataset.nav : null;
   const scrollLeft = box.scrollLeft;
   box.innerHTML = NAV_ITEMS.map(it => {
-    const on = state.nav === it.id;
+    const on = it.id === 'amazon' ? !!AMAZON_NAV_IDS[state.nav] : state.nav === it.id;
     const text = on ? it.label : it.short;
     return `<button data-nav="${esc(it.id)}" class="${on ? 'on' : ''}" title="${esc(it.label)}" aria-label="${esc(it.label)}"${on ? ' aria-current="page"' : ''}>` +
       `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[it.ic]}</svg>` +
       `<span class="lbl">${esc(text)}</span></button>`;
   }).join('');
   $$('#topnav button').forEach(b => { b.onclick = () => selectNav(b.dataset.nav); });
+  box.scrollLeft = scrollLeft;
+  if (focused) {
+    const nb = box.querySelector(`button[data-nav="${focused}"]`);
+    if (nb) { nb.focus({ preventScroll: true }); nb.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+  }
+}
+
+/* Amazon 二级导航：仅 Amazon 主入口下显示，Team 选中时父级 Amazon 仍高亮 */
+function renderAmazonTabs() {
+  const box = $('#amazonTabs');
+  if (!box) return;
+  const show = !!AMAZON_NAV_IDS[state.nav];
+  box.hidden = !show;
+  if (!show) { box.innerHTML = ''; return; }
+  const focused = document.activeElement && box.contains(document.activeElement)
+    ? document.activeElement.dataset.nav : null;
+  const scrollLeft = box.scrollLeft;
+  box.innerHTML = AMAZON_TABS.map(it => {
+    const on = state.nav === it.id;
+    return `<button data-nav="${esc(it.id)}" class="${on ? 'on' : ''}"${on ? ' aria-current="page"' : ''}>${esc(it.label)}</button>`;
+  }).join('');
+  $$('#amazonTabs button').forEach(b => { b.onclick = () => selectNav(b.dataset.nav); });
   box.scrollLeft = scrollLeft;
   if (focused) {
     const nb = box.querySelector(`button[data-nav="${focused}"]`);
@@ -623,6 +652,7 @@ function updatePageHead() {
   if (!t) return;
   const it = navItem(state.nav);
   t.textContent = it.label;
+  renderAmazonTabs();
   if (s) {
     s.textContent = state.nav === 'prod'
       ? '评论分析 · 多平台 VOC 洞察'
