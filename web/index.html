@@ -37,8 +37,8 @@
     </div>
   </div>
 
-  <nav class="platform-groups" id="platformGroups"></nav>
-  <nav class="platform-tabs" id="platformTabs"></nav>
+  <nav class="topnav" id="topnav" aria-label="主导航"></nav>
+  <nav class="platform-groups" id="platformGroups" hidden></nav>
 
   <div class="top-actions">
     <button class="btn-ghost accent" id="btnAsSummary" hidden title="跨平台售后总览">售后总览</button>
@@ -54,15 +54,7 @@
 </header>
 
 <main class="layout">
-  <aside class="sidebar">
-    <button class="btn-new" id="btnNew">
-      <span class="plus">+</span> 新建分析
-    </button>
-    <button class="sidebar-head" id="btnRecords" title="打开分析报告记录板块">
-      <span id="dsHeadLabel">分析报告记录</span>
-      <span class="sh-right"><span class="count" id="dsCount">0</span><span class="sh-go">查看 ›</span></span>
-    </button>
-
+  <aside class="sidebar" hidden>
     <div class="list-toolbar">
       <select id="dsFilter" title="按平台筛选">
         <option value="all">全部平台</option>
@@ -84,6 +76,21 @@
   </aside>
 
   <section class="content">
+    <div class="page-head" id="pageHead">
+      <div class="page-head-main">
+        <h1 id="pageTitle">产品VOC</h1>
+        <p id="pageSub">评论分析 · 多平台 VOC 洞察</p>
+      </div>
+      <div class="page-head-actions" id="pageHeadActions">
+        <button class="btn-new" id="btnNew"><span class="plus">+</span> 新建分析</button>
+        <button class="btn-ghost" id="btnRecords" title="打开分析报告记录板块">
+          <span id="dsHeadLabel">分析报告记录</span>
+          <span class="count" id="dsCount">0</span>
+        </button>
+      </div>
+    </div>
+    <nav class="platform-tabs" id="platformTabs" hidden></nav>
+
     <!-- ============ 新建 / 上传视图 ============ -->
     <div class="view" id="viewSetup">
       <div class="setup-wrap">

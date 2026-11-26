@@ -14,7 +14,7 @@ function section(start, end) {
 }
 const functions = [
   section('function esc(', 'function toast('),
-  section('function renderPlatformGroups(', 'function syncGroupFromPlatform('),
+  section('const NAV_ICONS =', 'function syncGroupFromPlatform('),
   section('function syncGroupFromPlatform(', 'function applyPlatform('),
   section('function applyPlatform(', 'function applyPlatformTexts('),
   section('function applyPlatformTexts(', '/* ============================ 分析引擎'),
@@ -24,7 +24,7 @@ const functions = [
   section('function watchJob(', 'function bindResultEvents()'),
   section('async function openDataset(', 'function renderResult()'),
   section('async function boot(', '/* ---------------- 记住密码'),
-  section('function onHashChange()', 'function renderPlatformGroups()'),
+  section('function onHashChange()', 'const NAV_ICONS ='),
   section('function showLogin(', 'function hideLogin('),
   section('async function doLogout(', 'function bindLogin('),
   section('function handleAuthFailure(', 'function emptyVoiceFilter('),
@@ -62,7 +62,8 @@ function context() {
   function element(selector) {
     if (!elements.has(selector)) {
       const el = {
-        style: {}, hidden: true, textContent: '', className: '', value: '',
+        style: {}, hidden: true, textContent: '', className: '', value: '', dataset: {},
+        addEventListener() {},
         attributes: {},
         classList: {
           _classes: new Set(),

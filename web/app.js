@@ -161,6 +161,8 @@ function loginShake() {
 
 function showLogin(msg) {
   state.viewRequest++;
+  state.boardView = null;
+  cancelBoardPending();
   const frame = $('#boardFrame');
   if (frame) frame.removeAttribute('src');
   const vb = $('#viewBoard');
@@ -205,10 +207,15 @@ async function boot() {
   state.platforms = platforms;
   const _first = platforms.find(p => p.id === state.platform) || platforms[0];
   state.group = _first ? (_first.group || '其他') : '其他';
+  state.nav = 'prod';
+  state.boardView = null;
+  renderTopNav();
+  updatePageHead();
   renderPlatformGroups();
   renderPlatformTabs();
   updateGroupUI();
   bindAftersaleUI();
+  bindBoardFrame();
   bindSetupEvents();
   bindResultEvents();
   bindListToolbar();
@@ -238,7 +245,7 @@ async function boot() {
       renderPlatformGroups();
       renderPlatformTabs();
       updateGroupUI();
-      applyPlatform(state.platform, { updateHash: false });
+      applyPlatform(state.platform, { updateHash: false, nav: 'amazon' });
     }
   } else if (!dsId && hash === 'records') {
     showView('records');
@@ -505,7 +512,7 @@ function onHashChange() {
       renderPlatformGroups();
       renderPlatformTabs();
       updateGroupUI();
-      applyPlatform(state.platform, { updateHash: false });
+      applyPlatform(state.platform, { updateHash: false, nav: 'amazon' });
     }
     return;
   }
@@ -527,10 +534,53 @@ function onHashChange() {
   if (target && target !== state.tab && state.result) switchTab(target);
 }
 
+/* 顶部胶囊主导航：七个主入口，选中项显示全名，未选中显示短名 */
+const NAV_ICONS = {
+  prod: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  amazon: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  wayfair: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+  site: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/>',
+  team: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
+};
+const NAV_ITEMS = [
+  { id: 'prod', label: '产品VOC', short: '产品VOC', ic: 'prod' },
+  { id: 'amazon', label: 'Amazon 概览', short: 'Amazon', ic: 'amazon' },
+  { id: 'wayfair', label: 'Wayfair 概览', short: 'Wayfair', ic: 'wayfair' },
+  { id: 'site', label: '独立站概览', short: '独立站', ic: 'site' },
+  { id: 't1', label: 'Team 1', short: 'Team 1', ic: 'team' },
+  { id: 't2', label: 'Team 2', short: 'Team 2', ic: 'team' },
+  { id: 't3', label: 'Team 3', short: 'Team 3', ic: 'team' },
+];
+
+function navItem(id) { return NAV_ITEMS.find(x => x.id === id) || NAV_ITEMS[0]; }
+
+function renderTopNav() {
+  const box = $('#topnav');
+  if (!box) return;
+  const focused = document.activeElement && box.contains(document.activeElement)
+    ? document.activeElement.dataset.nav : null;
+  const scrollLeft = box.scrollLeft;
+  box.innerHTML = NAV_ITEMS.map(it => {
+    const on = state.nav === it.id;
+    const text = on ? it.label : it.short;
+    return `<button data-nav="${esc(it.id)}" class="${on ? 'on' : ''}" title="${esc(it.label)}" aria-label="${esc(it.label)}"${on ? ' aria-current="page"' : ''}>` +
+      `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[it.ic]}</svg>` +
+      `<span class="lbl">${esc(text)}</span></button>`;
+  }).join('');
+  $$('#topnav button').forEach(b => { b.onclick = () => selectNav(b.dataset.nav); });
+  box.scrollLeft = scrollLeft;
+  if (focused) {
+    const nb = box.querySelector(`button[data-nav="${focused}"]`);
+    if (nb) nb.focus({ preventScroll: true });
+  }
+}
+
 function renderPlatformGroups() {
   const seen = [];
   state.platforms.forEach(p => { const g = p.group || '其他'; if (!seen.includes(g)) seen.push(g); });
-  $('#platformGroups').innerHTML = seen.map(g =>
+  const box = $('#platformGroups');
+  if (!box) return;
+  box.innerHTML = seen.map(g =>
     `<button data-g="${esc(g)}" class="${g === state.group ? 'active' : ''}">${esc(g)}</button>`
   ).join('');
   $$('#platformGroups button').forEach(b => {
@@ -540,11 +590,93 @@ function renderPlatformGroups() {
 
 function renderPlatformTabs() {
   const kids = state.platforms.filter(p => (p.group || '其他') === state.group);
-  $('#platformTabs').innerHTML = kids.map(p =>
+  const box = $('#platformTabs');
+  if (!box) return;
+  box.innerHTML = kids.map(p =>
     `<button data-p="${esc(p.id)}" class="${p.id === state.platform ? 'active' : ''}">${esc(p.label_cn || p.name)}</button>`
   ).join('');
   $$('#platformTabs button').forEach(b => {
     b.onclick = () => applyPlatform(b.dataset.p);
+  });
+}
+
+/* 主入口 → 平台/看板视图的映射（复用既有 applyPlatform / showView 入口） */
+function selectNav(id) {
+  if (id === 'prod') {
+    const p = state.platforms.find(x => x.kind !== 'aftersale') || state.platforms[0];
+    if (p) applyPlatform(p.id);
+    return;
+  }
+  if (id === 'amazon' || id === 'wayfair') {
+    const pid = id === 'amazon' ? 'AmazonCs' : 'WayfairCs';
+    if (state.platforms.some(p => p.id === pid)) applyPlatform(pid);
+    return;
+  }
+  if (id === 'site' || id === 't1' || id === 't2' || id === 't3') {
+    if (state.platforms.some(p => p.id === 'AmazonCs')) applyPlatform('AmazonCs', { nav: id });
+  }
+}
+
+/* 内容区大标题与主入口同步 */
+function updatePageHead() {
+  const t = $('#pageTitle'), s = $('#pageSub');
+  if (!t) return;
+  const it = navItem(state.nav);
+  t.textContent = it.label;
+  if (s) {
+    s.textContent = state.nav === 'prod'
+      ? '评论分析 · 多平台 VOC 洞察'
+      : (state.nav === 'site' ? '售后 VOC · 独立站' : '售后 VOC 看板');
+  }
+  const actions = $('#pageHeadActions');
+  if (actions) actions.hidden = state.nav !== 'prod';
+  const tabs = $('#platformTabs');
+  if (tabs) tabs.hidden = state.nav !== 'prod';
+}
+
+/* 通过 iframe 内既有 data-view 按钮触发 board.js 正常导航。
+   board.js 在首次异步拉取后才渲染 #nav，因此用短命 MutationObserver 等待按钮出现，
+   应用最新一次待处理请求后立即断开，避免后续图表重绘时反复点击。 */
+let _boardReq = 0;
+let _boardObs = null;
+
+function cancelBoardPending() {
+  _boardReq++;
+  if (_boardObs) { _boardObs.disconnect(); _boardObs = null; }
+}
+
+function requestBoardView(view) {
+  state.boardView = view;
+  const frame = $('#boardFrame');
+  if (!frame) return;
+  const req = ++_boardReq;
+  if (_boardObs) { _boardObs.disconnect(); _boardObs = null; }
+  const tryApply = () => {
+    if (req !== _boardReq || state.view !== 'board' || !state.boardView) return true;
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) return false;
+    doc.body.classList.add('board-embed');
+    const btn = doc.querySelector(`#nav button[data-bind="nav"][data-view="${state.boardView}"]`);
+    if (!btn) return false;
+    btn.click();
+    return true;
+  };
+  if (tryApply()) return;
+  const doc = frame.contentDocument;
+  if (!doc || !doc.body) return;
+  _boardObs = new MutationObserver(() => {
+    if (tryApply()) { _boardObs.disconnect(); _boardObs = null; }
+  });
+  _boardObs.observe(doc.body, { childList: true, subtree: true });
+}
+
+function bindBoardFrame() {
+  const frame = $('#boardFrame');
+  if (!frame || frame.dataset.bound === '1') return;
+  frame.dataset.bound = '1';
+  frame.addEventListener('load', () => {
+    if (frame.getAttribute('src') !== '/board') return;
+    if (state.view === 'board' && state.boardView) requestBoardView(state.boardView);
   });
 }
 
@@ -566,7 +698,7 @@ function syncGroupFromPlatform() {
   updateGroupUI();
 }
 
-function applyPlatform(pid, { updateHash = true } = {}) {
+function applyPlatform(pid, { updateHash = true, nav = null } = {}) {
   state.viewRequest++;
   state.platform = pid;
   state.recScope = 'platform';      // 切换平台板块时，报告记录自动跟随到该平台
@@ -580,6 +712,18 @@ function applyPlatform(pid, { updateHash = true } = {}) {
   }
   applyPlatformTexts(pid);
   $$('#platformTabs button').forEach(b => b.classList.toggle('active', b.dataset.p === pid));
+  // 先决定主入口状态，再决定视图与看板选择
+  let nextNav = 'prod', nextBoard = null;
+  if (nav === 'site') { nextNav = 'site'; nextBoard = 'Independent'; }
+  else if (nav === 't1' || nav === 't2' || nav === 't3') { nextNav = nav; nextBoard = 'Team ' + nav.slice(1); }
+  else if (p && p.kind === 'aftersale') {
+    nextNav = pid === 'WayfairCs' ? 'wayfair' : 'amazon';
+    nextBoard = pid === 'WayfairCs' ? 'Wayfair' : 'all';
+  }
+  state.nav = nextNav;
+  state.boardView = nextBoard;
+  renderTopNav();
+  updatePageHead();
   if (p && p.kind === 'aftersale') {
     showView('board');
     if (updateHash) history.replaceState(null, '', '#board');
@@ -701,6 +845,16 @@ function hexA(hex, a) {
 
 function showView(name) {
   state.view = name;
+  if (name !== 'board') {
+    // 离开看板：取消待应用的 iframe 选择，主入口回到产品页
+    state.boardView = null;
+    cancelBoardPending();
+    if (state.nav !== 'prod') {
+      state.nav = 'prod';
+      renderTopNav();
+      updatePageHead();
+    }
+  }
   $('#viewSetup').hidden = name !== 'setup';
   $('#viewProgress').hidden = name !== 'progress';
   $('#viewResult').hidden = name !== 'result';
@@ -712,6 +866,7 @@ function showView(name) {
   if (name === 'board') {
     const frame = $('#boardFrame');
     if (frame && frame.getAttribute('src') !== '/board') frame.setAttribute('src', '/board');
+    if (state.boardView) requestBoardView(state.boardView);
   }
   if (name === 'records') renderRecordsBoard();
 }
