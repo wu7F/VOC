@@ -53,23 +53,65 @@ class ComponentSalesTests(unittest.TestCase):
 
     def test_merge_grain_is_shop_product_month_and_team(self):
         s = build([row(P, 10), row(R, 8), row(P, 6, month='2026-05'), row(R, 4, month='2026-05'),
-                   row(R, 9, account='B'), row(P, 3, account='C', team='Team 2')])
+                   row(R, 9, account='B'), row(P, 11, account='B'),
+                   row(P, 3, account='C', team='Team 2'), row(R, 4, account='C', team='Team 2')])
         self.assertEqual(sold(s), 8)
         self.assertEqual(sold(s, month='2026-05'), 4)
         self.assertEqual(sold(s, account='B'), 9)
         self.assertEqual(sold(s, account='C'), 3)
 
-    def test_missing_component_is_ignored_but_observed_zero_is_min(self):
-        self.assertEqual(sold(build([row(R, 5)])), 5)
-        self.assertEqual(sold(build([row(P, 5)])), 5)
+    def test_missing_required_component_yields_zero_but_observed_zero_is_min(self):
+        self.assertEqual(sold(build([row(R, 5)])), 0)
+        self.assertEqual(sold(build([row(P, 5)])), 0)
         self.assertEqual(sold(build([row(P, 5), row(R, 0)])), 0)
         self.assertIsNone(sold(build([row(R, 5)]), month='2026-05'))
 
+    def test_missing_required_third_component_yields_zero(self):
+        s = build([row(P3, 94), row(M3, 94)])
+        self.assertEqual(sold(s, P3), 0)
+        self.assertEqual(shop(s)['months']['2026-04'], 0)
+        self.assertEqual(shop(s)['units_known'], 0)
+
+    def test_missing_required_seventh_component_yields_zero(self):
+        target = 'LAYJHLR8005DG-LT'
+        parts = ['LAYJHLR8005DG-LT', 'LAYJHLR8005DG-ME1', 'LAYJHLR8005DG-ZJKB',
+                 'LAYJHLR8005DG-ZJDZ', 'LAYJHLR8005DG-ME2', 'LAYJHLR8005DG-RT']
+        pair = {target: {'display_name': '七件套', 'wf_part_number': 'W7'}}
+        s = build([row(p, 9) for p in parts], pair_map=pair)
+        self.assertEqual(sold(s, target), 0)
+        complete = build([row(p, 9) for p in parts] + [row('LAYJHLR8005DG-CJ', 7)], pair_map=pair)
+        self.assertEqual(sold(complete, target), 7)
+
+    def test_missing_and_invalid_precedence_keeps_unknown(self):
+        s = build([row(P, None)])
+        self.assertIsNone(sold(s))
+        self.assertIsNone(shop(s)['months']['2026-04'])
+        self.assertIn('2026-04', shop(s)['missing_months'])
+
+    def test_complete_required_group_still_uses_min(self):
+        s = build([row(P, 316), row(R, 310)])
+        self.assertEqual(sold(s), 310)
+        self.assertEqual(shop(s)['months']['2026-04'], 310)
+
+    def test_entirely_absent_group_stays_absent(self):
+        s = build([row('PLAIN', 4)])
+        skus = {x['sku'] for x in shop(s)['skus']}
+        self.assertNotIn(P, skus)
+        self.assertNotIn(P3, skus)
+        self.assertIn('PLAIN', skus)
+        self.assertIsNone(shop(s)['months']['2026-05'])
+
+    def test_pending_g02_group_retains_observed_only_minimum(self):
+        g02 = 'LAYJMZPG02CR-2L'
+        pair = {g02: {'display_name': 'G02', 'wf_part_number': 'WG'}}
+        s = build([row('LAYJMZPG02CR-2R', 5)], pair_map=pair)
+        self.assertEqual(sold(s, g02), 5)
+
     def test_observed_alias_overrides_canonical_confirmed_zero_backfill(self):
         s = build([row(R, 5)], confirmed_zero_skus={P})
-        self.assertEqual(sold(s), 5)
+        self.assertEqual(sold(s), 0)
         self.assertEqual(sold(s, month='2026-05'), 0)
-        self.assertEqual(shop(s)['months']['2026-04'], 5)
+        self.assertEqual(shop(s)['months']['2026-04'], 0)
         self.assertIsNone(shop(s)['months']['2026-05'])
 
     def test_observed_invalid_is_not_a_missing_component(self):
@@ -86,6 +128,9 @@ class ComponentSalesTests(unittest.TestCase):
         self.assertIsNone(sold(bad))
         self.assertIsNone(shop(bad)['months']['2026-04'])
         self.assertTrue(any(d['code'] == 'duplicate_key' for d in bad['diagnostics']))
+        missing_dup = build([row(R, 4), row(R, 4)])
+        self.assertIsNone(sold(missing_dup))
+        self.assertTrue(any(d['code'] == 'duplicate_key' for d in missing_dup['diagnostics']))
 
     def test_unrelated_product_duplicate_policy_is_preserved(self):
         s = build([row('PLAIN', 2), row('PLAIN', 3)])
@@ -106,9 +151,9 @@ class ComponentSalesTests(unittest.TestCase):
         self.assertEqual(shop(s)['months']['2026-04'], 6)
 
     def test_only_fixed_aliases_with_current_paired_target_are_admitted(self):
-        s = build([row(P, 10), row(R + '-NEW', 2)])
+        s = build([row(P, 10), row(R, 10), row(R + '-NEW2', 2)])
         self.assertEqual(sold(s), 10)
-        self.assertIn(R + '-NEW', s['teams'][0]['unpaired_skus'])
+        self.assertIn(R + '-NEW2', s['teams'][0]['unpaired_skus'])
         missing_target = build([row(R, 3)], pair_map={'PLAIN': PAIR['PLAIN']})
         self.assertEqual(missing_target['teams'][0]['unpaired_skus'], [R])
         self.assertEqual(missing_target['teams'][0]['merged_sku_totals'], [])
@@ -202,6 +247,22 @@ class ComponentCacheTests(unittest.TestCase):
         legacy['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
         cache.clear()
         cache[legacy_key] = legacy
+        fresh = self.refresh(cache, (50, 40), False)
+        self.assertFalse(fresh['aftersale']['connected'])
+        self.assertFalse(fresh['stale'])
+        self.assertEqual(sold(fresh, account='xingshan_US'), 40)
+        self.assertNotEqual(fresh['teams'], first['teams'])
+
+    def test_v4_component_min_cache_cannot_supply_required_subset_policy(self):
+        cache = {}
+        first = self.refresh(cache, (10, 8), True)
+        key, entry = next(iter(cache.items()))
+        self.assertEqual(key[-1], 'v5_component_required_subset')
+        v4_key = key[:-1] + ('v4_component_min',)
+        v4 = copy.deepcopy(entry)
+        v4['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
+        cache.clear()
+        cache[v4_key] = v4
         fresh = self.refresh(cache, (50, 40), False)
         self.assertFalse(fresh['aftersale']['connected'])
         self.assertFalse(fresh['stale'])

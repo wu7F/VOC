@@ -74,11 +74,30 @@ COMPONENT_ALIASES: dict[str, str] = {
 }
 
 
+# Explicit fixed required-component subsets for approved single-version products.
+# Partial local coverage only; pending products keep observed-only minimum behavior.
+REQUIRED_COMPONENTS: dict[str, tuple[str, ...]] = {
+    "LAYJMZP8018CR-2L": ("LAYJMZP8018CR-2L", "LAYJMZP8018CR-2R"),
+    "LAYJMZP8018BK-2L": ("LAYJMZP8018BK-2L", "LAYJMZP8018BK-2R"),
+    "LAYJMZP8018CR-3L": ("LAYJMZP8018CR-3L", "LAYJMZP8018CR-3M", "LAYJMZP8018CR-3R"),
+    "LAYJMZP8018BK-3L": ("LAYJMZP8018BK-3L", "LAYJMZP8018BK-3M", "LAYJMZP8018BK-3R"),
+    "LAYJMZP8018DG-3L": ("LAYJMZP8018DG-3L", "LAYJMZP8018DG-3M", "LAYJMZP8018DG-3R"),
+    "LAYJMZPG01CR-2L": ("LAYJMZPG01CR-2L", "LAYJMZPG01CR-2R"),
+    "LAYJMZPG01CR-3L": ("LAYJMZPG01CR-3L", "LAYJMZPG01CR-3M", "LAYJMZPG01CR-3R"),
+    "LAYJMZPG01LG-2L": ("LAYJMZPG01LG-2L", "LAYJMZPG01LG-2R"),
+    "LAYJMZPG01LG-3L": ("LAYJMZPG01LG-3L", "LAYJMZPG01LG-3M", "LAYJMZPG01LG-3R"),
+    "LAYJMZP0458LG-3MT": ("LAYJMZP0458LG-3MT", "LAYJMZP0458LG-3LT", "LAYJMZP0458LG-3RT", "LAYJMZP0458LG-3KB"),
+    "LAYJHLR8005DG-LT": ("LAYJHLR8005DG-LT", "LAYJHLR8005DG-ME1", "LAYJHLR8005DG-ZJKB", "LAYJHLR8005DG-ZJDZ", "LAYJHLR8005DG-ME2", "LAYJHLR8005DG-RT", "LAYJHLR8005DG-CJ"),
+}
+
+
 def merge_component_rows(rows: list[dict], pair_map: dict | None, diagnostics: list[dict]) -> list[dict]:
     """Return normalized rows with admitted aliases merged to canonical products by minimum quantity.
 
     Only component rows whose canonical target exists in pair_map are merged.
     Unrelated rows pass through unchanged (copied). No missing-component synthesis.
+    For targets in REQUIRED_COMPONENTS, an observed group with any required original
+    SKU absent yields qty 0; invalid/duplicate observations still take precedence.
     """
     if pair_map is None:
         return [dict(r) for r in rows]
@@ -132,8 +151,13 @@ def merge_component_rows(rows: list[dict], pair_map: dict | None, diagnostics: l
             merged["qty"] = None
             merged["invalid"] = True
         else:
-            merged["qty"] = min(qty_values)
-            merged["invalid"] = False
+            required = REQUIRED_COMPONENTS.get(canonical)
+            if required is not None and any(sku not in by_orig for sku in required):
+                merged["qty"] = 0
+                merged["invalid"] = False
+            else:
+                merged["qty"] = min(qty_values)
+                merged["invalid"] = False
         out.append(merged)
 
     return unrelated + out
