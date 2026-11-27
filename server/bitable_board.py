@@ -85,7 +85,7 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 30.0
 
-CACHE_VERSION = "v5_component_required_subset"
+CACHE_VERSION = "v6_component_required_202641"
 
 # 本地确认快照（只读，非实时）。缺失文件时售后保持未接入。
 AFTERSALE_SNAPSHOT_PATH = Path(__file__).resolve().parent / "aftersale_snapshot.json"

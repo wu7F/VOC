@@ -176,6 +176,51 @@ class ComponentSalesTests(unittest.TestCase):
         self.assertEqual(s['teams'][0]['unpaired_skus'], ['UNPAIRED'])
 
 
+class Component202641Tests(unittest.TestCase):
+    T = 'LAYJMZP202641DBR-2LT'
+    RT = 'LAYJMZP202641DBR-2RT'
+    AR = 'LAYJMZP202641DBR-AR'
+
+    def pair(self):
+        return {self.T: {'display_name': '202641双人', 'wf_part_number': 'W2641'}}
+
+    def test_complete_southwest_like_group_uses_min(self):
+        s = build([row(self.T, 2, 'southwest_US', month='2026-11'),
+                   row(self.RT, 1, 'southwest_US', month='2026-11'),
+                   row(self.AR, 1, 'southwest_US', month='2026-11')],
+                  teams=bb.TEAM_TABLES, pair_map=self.pair())
+        self.assertEqual(sold(s, self.T, month='2026-11', account='southwest_US'), 1)
+        self.assertEqual(shop(s, 'southwest_US')['months']['2026-11'], 1)
+
+    def test_each_required_part_independently_absent_yields_zero(self):
+        for missing in (self.T, self.RT, self.AR):
+            parts = [p for p in (self.T, self.RT, self.AR) if p != missing]
+            s = build([row(p, 5) for p in parts], pair_map=self.pair())
+            self.assertEqual(sold(s, self.T), 0, missing)
+            self.assertEqual(shop(s)['months']['2026-04'], 0, missing)
+
+    def test_missing_part_with_observed_invalid_is_unknown(self):
+        s = build([row(self.T, 5), row(self.RT, None)], pair_map=self.pair())
+        self.assertIsNone(sold(s, self.T))
+        self.assertIsNone(shop(s)['months']['2026-04'])
+        self.assertIn('2026-04', shop(s)['missing_months'])
+
+    def test_missing_part_with_duplicate_is_unknown(self):
+        s = build([row(self.T, 5), row(self.RT, 4), row(self.RT, 4)], pair_map=self.pair())
+        self.assertIsNone(sold(s, self.T))
+        self.assertTrue(any(d['code'] == 'duplicate_key' for d in s['diagnostics']))
+
+    def test_entirely_absent_group_stays_absent(self):
+        pair = dict(self.pair())
+        pair['PLAIN'] = PAIR['PLAIN']
+        s = build([row('PLAIN', 4)], pair_map=pair)
+        skus = {x['sku'] for x in shop(s)['skus']}
+        self.assertNotIn(self.T, skus)
+        self.assertIn('PLAIN', skus)
+        self.assertEqual(sold(s, 'PLAIN'), 4)
+        self.assertIsNone(shop(s)['months']['2026-05'])
+
+
 class ComponentAftersaleIntegrationTests(unittest.TestCase):
     def test_live_denominator_month_fallback_and_t01_use_the_merged_sales(self):
         pair = {P: PAIR[P], 'SRT01-BR': {'display_name': 'T01', 'wf_part_number': 'WT'}}
@@ -257,7 +302,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v5_component_required_subset')
+        self.assertEqual(key[-1], 'v6_component_required_202641')
         v4_key = key[:-1] + ('v4_component_min',)
         v4 = copy.deepcopy(entry)
         v4['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
@@ -268,3 +313,35 @@ class ComponentCacheTests(unittest.TestCase):
         self.assertFalse(fresh['stale'])
         self.assertEqual(sold(fresh, account='xingshan_US'), 40)
         self.assertNotEqual(fresh['teams'], first['teams'])
+
+    def test_v5_component_required_subset_cache_cannot_supply_202641_policy(self):
+        cache = {}
+        first = self.refresh(cache, (10, 8), True)
+        key, entry = next(iter(cache.items()))
+        self.assertEqual(key[-1], 'v6_component_required_202641')
+        v5_key = key[:-1] + ('v5_component_required_subset',)
+        v5 = copy.deepcopy(entry)
+        v5['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
+        cache.clear()
+        cache[v5_key] = v5
+        fresh = self.refresh(cache, (50, 40), False)
+        self.assertFalse(fresh['aftersale']['connected'])
+        self.assertFalse(fresh['stale'])
+        self.assertEqual(sold(fresh, account='xingshan_US'), 40)
+        self.assertNotEqual(fresh['teams'], first['teams'])
+
+    def test_v4_and_v5_caches_cannot_supply_202641_policy_under_sales_read_failure(self):
+        cache = {}
+        first = self.refresh(cache, (10, 8), True)
+        key, entry = next(iter(cache.items()))
+        self.assertEqual(key[-1], 'v6_component_required_202641')
+        for old_version in ('v4_component_min', 'v5_component_required_subset'):
+            old_key = key[:-1] + (old_version,)
+            old = copy.deepcopy(entry)
+            old['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
+            cache.clear()
+            cache[old_key] = old
+            fresh = self.refresh(cache, (50, 40), True, fail_sales=True)
+            self.assertFalse(fresh['ok'])
+            self.assertFalse(fresh['stale'])
+            self.assertNotIn('teams', fresh)
