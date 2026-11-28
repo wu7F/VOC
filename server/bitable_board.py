@@ -85,7 +85,7 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 30.0
 
-CACHE_VERSION = "v7_8018_excluded_0458_packages"
+CACHE_VERSION = "v8_g02_complete_packages"
 
 # 本地确认快照（只读，非实时）。缺失文件时售后保持未接入。
 AFTERSALE_SNAPSHOT_PATH = Path(__file__).resolve().parent / "aftersale_snapshot.json"
@@ -1203,6 +1203,9 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
             pair = pair_map[sku]
             display_name = pair.get("display_name") or ""
             if component_sales.is_8018_product(sku, display_name):
+                continue
+            rollup = component_sales.PRODUCT_ROLLUPS.get(sku)
+            if rollup is not None and rollup in pair_map:
                 continue
             products.append({
                 "sku": sku,

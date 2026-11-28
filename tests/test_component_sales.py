@@ -302,7 +302,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v7_8018_excluded_0458_packages')
+        self.assertEqual(key[-1], 'v8_g02_complete_packages')
         v4_key = key[:-1] + ('v4_component_min',)
         v4 = copy.deepcopy(entry)
         v4['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
@@ -318,7 +318,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v7_8018_excluded_0458_packages')
+        self.assertEqual(key[-1], 'v8_g02_complete_packages')
         v5_key = key[:-1] + ('v5_component_required_subset',)
         v5 = copy.deepcopy(entry)
         v5['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
@@ -334,7 +334,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v7_8018_excluded_0458_packages')
+        self.assertEqual(key[-1], 'v8_g02_complete_packages')
         for old_version in ('v4_component_min', 'v5_component_required_subset'):
             old_key = key[:-1] + (old_version,)
             old = copy.deepcopy(entry)

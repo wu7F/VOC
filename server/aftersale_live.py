@@ -524,6 +524,11 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
                 continue
             matched_sku = paired[0]
 
+        # 折叠已准入的新配对 LEFT 产品到旧 canonical（仅当 canonical 存在）。
+        rollup = component_sales.PRODUCT_ROLLUPS.get(matched_sku)
+        if rollup is not None and rollup in pair_map:
+            matched_sku = rollup
+
         # 再次检查 T01（针对匹配后的 SKU）
         matched_entry = pair_map.get(matched_sku)
         if matched_entry is not None:

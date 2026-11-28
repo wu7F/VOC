@@ -40,10 +40,6 @@ COMPONENT_ALIASES: dict[str, str] = {
     "LAYJMZPG02DG-RT": "LAYJMZPG02DG-LT",
     "LAYJMZPG02DG-ZJDZ": "LAYJMZPG02DG-LT",
     "LAYJMZPG02DG-ZJKB": "LAYJMZPG02DG-LT",
-    "LAYJMZPG02DG-2LT": "LAYJMZPG02DG-2L",
-    "LAYJMZPG02DG-2MT": "LAYJMZPG02DG-2L",
-    "LAYJMZPG02DG-2RT": "LAYJMZPG02DG-2L",
-    "LAYJMZPG02DG-3MT": "LAYJMZPG02DG-3L",
     "LAYJMZPG02DG-CJT": "LAYJMZPG02DG-LT",
     "LAYJMZPG02DG-KBT": "LAYJMZPG02DG-LT",
     "LAYJMZPG02DG-ZJDZT": "LAYJMZPG02DG-LT",
@@ -61,6 +57,16 @@ COMPONENT_ALIASES: dict[str, str] = {
     "LAYJHLR8005DG-RT": "LAYJHLR8005DG-LT",
     "LAYJHLR8005DG-ZJDZ": "LAYJHLR8005DG-LT",
     "LAYJHLR8005DG-ZJKB": "LAYJHLR8005DG-LT",
+    # New paired LEFT products fold to the old canonical seat products.
+    "LAYJMZPG02CR-2LEFT": "LAYJMZPG02CR-2L",
+    "LAYJMZPG02DG-2LEFT": "LAYJMZPG02DG-2L",
+    "LAYJMZPG02CR-3LEFT": "LAYJMZPG02CR-3L",
+    "LAYJMZPG02DG-3LEFT": "LAYJMZPG02DG-3L",
+    # DG corner package parts (moved out of seat groups).
+    "LAYJMZPG02DG-2LT": "LAYJMZPG02DG-LT",
+    "LAYJMZPG02DG-2MT": "LAYJMZPG02DG-LT",
+    "LAYJMZPG02DG-2RT": "LAYJMZPG02DG-LT",
+    "LAYJMZPG02DG-3MT": "LAYJMZPG02DG-LT",
 }
 
 
@@ -74,18 +80,7 @@ REQUIRED_COMPONENTS: dict[str, tuple[str, ...]] = {
     "LAYJMZP0458LG-3MT": ("LAYJMZP0458LG-3MT", "LAYJMZP0458LG-3LT", "LAYJMZP0458LG-3RT", "LAYJMZP0458LG-3KB"),
     "LAYJHLR8005DG-LT": ("LAYJHLR8005DG-LT", "LAYJHLR8005DG-ME1", "LAYJHLR8005DG-ZJKB", "LAYJHLR8005DG-ZJDZ", "LAYJHLR8005DG-ME2", "LAYJHLR8005DG-RT", "LAYJHLR8005DG-CJ"),
     "LAYJMZP202641DBR-2LT": ("LAYJMZP202641DBR-2LT", "LAYJMZP202641DBR-2RT", "LAYJMZP202641DBR-AR"),
-    "LAYJMZPG02CR-2L": ("LAYJMZPG02CR-2L", "LAYJMZPG02CR-2R"),
-    "LAYJMZPG02DG-2L": ("LAYJMZPG02DG-2L", "LAYJMZPG02DG-2R"),
 }
-
-
-# Strict two-box G02 targets: only the original L/R parts may contribute.
-# Any other original SKU that aliases to these targets (e.g. 2RIGHT, DG 2LT/2MT/2RT)
-# is skipped before group creation and never rescues, lowers or poisons the group.
-STRICT_TWO_BOX_TARGETS: frozenset[str] = frozenset({
-    "LAYJMZPG02CR-2L",
-    "LAYJMZPG02DG-2L",
-})
 
 
 # Two independently complete packages for LAYJMZP240458LG-2L.
@@ -94,11 +89,45 @@ STRICT_TWO_BOX_TARGETS: frozenset[str] = frozenset({
 # Each package is evaluated separately; observed incomplete package yields 0,
 # complete package yields its minimum; the two results are summed. An entirely
 # absent package contributes nothing (never forces the other to zero).
+#
+# G02 seat/corner canonicals: each version is an independent package. Observed
+# partial => 0, complete => minimum, entirely absent => no contribution; present
+# version values are summed. Never mix colors or fill missing parts across versions.
 MULTI_PACKAGE_COMPONENTS: dict[str, tuple[tuple[str, ...], ...]] = {
     "LAYJMZP240458LG-2L": (
         ("LAYJMZP240458LG-2L", "LAYJMZP240458LG-2R"),
         ("LAYJMZP0458LG-2LT", "LAYJMZP0458LG-2RT", "LAYJMZP0458LG-2KB"),
     ),
+    "LAYJMZPG02CR-2L": (
+        ("LAYJMZPG02CR-2L", "LAYJMZPG02CR-2R"),
+        ("LAYJMZPG02CR-2LEFT", "LAYJMZPG02CR-2RIGHT"),
+    ),
+    "LAYJMZPG02DG-2L": (
+        ("LAYJMZPG02DG-2L", "LAYJMZPG02DG-2R"),
+        ("LAYJMZPG02DG-2LEFT", "LAYJMZPG02DG-2RIGHT"),
+    ),
+    "LAYJMZPG02CR-3L": (
+        ("LAYJMZPG02CR-3L", "LAYJMZPG02CR-3M", "LAYJMZPG02CR-3R"),
+        ("LAYJMZPG02CR-3LEFT", "LAYJMZPG02CR-3MIDDLE", "LAYJMZPG02CR-3RIGHT"),
+    ),
+    "LAYJMZPG02DG-3L": (
+        ("LAYJMZPG02DG-3L", "LAYJMZPG02DG-3M", "LAYJMZPG02DG-3R"),
+        ("LAYJMZPG02DG-3LEFT", "LAYJMZPG02DG-3MIDDLE", "LAYJMZPG02DG-3RIGHT"),
+    ),
+    "LAYJMZPG02DG-LT": (
+        ("LAYJMZPG02DG-LT", "LAYJMZPG02DG-ME1", "LAYJMZPG02DG-ZJKB", "LAYJMZPG02DG-ZJDZ", "LAYJMZPG02DG-ME2", "LAYJMZPG02DG-RT", "LAYJMZPG02DG-CJ"),
+        ("LAYJMZPG02DG-KBT", "LAYJMZPG02DG-2LT", "LAYJMZPG02DG-2MT", "LAYJMZPG02DG-ZJKBT", "LAYJMZPG02DG-ZJDZT", "LAYJMZPG02DG-3MT", "LAYJMZPG02DG-2RT", "LAYJMZPG02DG-CJT"),
+    ),
+}
+
+
+# Explicit product rollups: new paired LEFT products fold to the old canonical.
+# Only applied when the canonical exists in pair_map.
+PRODUCT_ROLLUPS: dict[str, str] = {
+    "LAYJMZPG02CR-2LEFT": "LAYJMZPG02CR-2L",
+    "LAYJMZPG02DG-2LEFT": "LAYJMZPG02DG-2L",
+    "LAYJMZPG02CR-3LEFT": "LAYJMZPG02CR-3L",
+    "LAYJMZPG02DG-3LEFT": "LAYJMZPG02DG-3L",
 }
 
 
@@ -226,13 +255,6 @@ def merge_component_rows(rows: list[dict], pair_map: dict | None, diagnostics: l
         else:
             unrelated.append(dict(r))
             continue
-
-        if canonical in STRICT_TWO_BOX_TARGETS:
-            required = REQUIRED_COMPONENTS.get(canonical)
-            if required is not None and sku not in required:
-                # Non-required original SKU for a strict two-box target: skip it.
-                # It stays pending for other package ownership; never reassigned.
-                continue
 
         key = (shop_filter.norm(r.get("account") or ""), canonical, r.get("month"))
         by_orig = groups.setdefault(key, {})

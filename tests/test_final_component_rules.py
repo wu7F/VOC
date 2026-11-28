@@ -256,9 +256,9 @@ class Aftersale8018ExclusionTests(unittest.TestCase):
 class AliasAndCacheTests(unittest.TestCase):
     def test_g02_alias_targets_unchanged(self):
         expected = {
-            'LAYJMZPG02DG-2LT': 'LAYJMZPG02DG-2L',
-            'LAYJMZPG02DG-2RT': 'LAYJMZPG02DG-2L',
-            'LAYJMZPG02DG-3MT': 'LAYJMZPG02DG-3L',
+            'LAYJMZPG02DG-2LT': 'LAYJMZPG02DG-LT',
+            'LAYJMZPG02DG-2RT': 'LAYJMZPG02DG-LT',
+            'LAYJMZPG02DG-3MT': 'LAYJMZPG02DG-LT',
             'LAYJMZPG02DG-CJ': 'LAYJMZPG02DG-LT',
             'LAYJMZPG02DG-ME1': 'LAYJMZPG02DG-LT',
             'LAYJMZPG02DG-ME2': 'LAYJMZPG02DG-LT',
@@ -269,7 +269,7 @@ class AliasAndCacheTests(unittest.TestCase):
             self.assertEqual(cs.COMPONENT_ALIASES[k], v)
 
     def test_v6_cache_cannot_serve_v7(self):
-        self.assertEqual(bb.CACHE_VERSION, 'v7_8018_excluded_0458_packages')
+        self.assertEqual(bb.CACHE_VERSION, 'v8_g02_complete_packages')
         self.assertNotEqual(bb.CACHE_VERSION, 'v6_component_required_202641')
 
     def test_old_v6_cache_entry_is_not_served_as_fresh(self):
@@ -278,7 +278,7 @@ class AliasAndCacheTests(unittest.TestCase):
         cache = {}
         helper.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v7_8018_excluded_0458_packages')
+        self.assertEqual(key[-1], 'v8_g02_complete_packages')
         old_key = key[:-1] + ('v6_component_required_202641',)
         old = copy.deepcopy(entry)
         old['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
