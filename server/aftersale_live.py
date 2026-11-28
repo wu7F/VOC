@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+from . import component_sales
 from .bitable_board import fetch_records, fetch_fields, BoardError
 from .aftersale import _reason_category
 from .aftersale_teams import TEAM_MEMBERS
@@ -434,6 +435,7 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         "ambiguous_pair": 0,
         "no_sales_month": 0,
         "unknown_sales_month": 0,
+        "excluded_8018": 0,
     }
 
     for fields, shop_field in all_records:
@@ -530,6 +532,12 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
                 diag_counts["t01_excluded"] += 1
                 continue
 
+        # 8018 系列排除：在月份回退之前显式检查解析后的 SKU/名称。
+        matched_dn = _text((matched_entry or {}).get("display_name"))
+        if component_sales.is_8018_product(matched_sku, matched_dn):
+            diag_counts["excluded_8018"] += 1
+            continue
+
         # 月份对齐：仅当销量分母已知（显式 0 或正数）才计入分子
         sales_months = sales_map.get((account, matched_sku))
         if sales_months is None:
@@ -569,6 +577,9 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         entry = pair_map.get(sku) or {}
         dn = _text(entry.get("display_name"))
         if _is_t01(sku, dn):
+            continue
+        # 8018 系列排除：即使调用方传入旧销量快照，分母也不计入。
+        if component_sales.is_8018_product(sku, dn):
             continue
         for mon, qty in months.items():
             if mon < START_MONTH:

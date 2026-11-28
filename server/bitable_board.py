@@ -85,7 +85,7 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 30.0
 
-CACHE_VERSION = "v6_component_required_202641"
+CACHE_VERSION = "v7_8018_excluded_0458_packages"
 
 # 本地确认快照（只读，非实时）。缺失文件时售后保持未接入。
 AFTERSALE_SNAPSHOT_PATH = Path(__file__).resolve().parent / "aftersale_snapshot.json"
@@ -833,6 +833,9 @@ def _build_shop(account: str, account_rows: list[dict], months: list[str],
     if confirmed_zero_skus and pair_map is not None:
         for sku in confirmed_zero_skus:
             if sku in pair_map:
+                _dn = (pair_map.get(sku) or {}).get("display_name") or ""
+                if component_sales.is_8018_product(sku, _dn):
+                    continue
                 all_skus.add(sku)
 
     sku_items: list[dict] = []
@@ -946,6 +949,20 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
         platform = r.get("platform", "").strip()
         if platform.lower() != "amazon":
             other_counts[platform] = other_counts.get(platform, 0) + 1
+            continue
+        if component_sales.is_ignored_g02_component(r.get("sku")):
+            continue
+        _raw_sku = r.get("sku")
+        _pair_dn = ""
+        if pair_map is not None and _raw_sku in pair_map:
+            _pair_dn = (pair_map.get(_raw_sku) or {}).get("display_name") or ""
+        if component_sales.is_8018_product(_raw_sku, _pair_dn):
+            diag.append({
+                "level": "info",
+                "code": "excluded_8018",
+                "message": "account=%s SKU=%s 属于 8018 系列，已从销量口径排除。"
+                           % (r.get("account", "?"), r.get("sku", "?")),
+            })
             continue
         month = r.get("month")
         if month is None or month < "2026-04" or month > current_month:
@@ -1185,6 +1202,8 @@ def build_snapshot(rows, diagnostics, *, now, source_meta,
         for sku in pair_map:
             pair = pair_map[sku]
             display_name = pair.get("display_name") or ""
+            if component_sales.is_8018_product(sku, display_name):
+                continue
             products.append({
                 "sku": sku,
                 "display_name": display_name,
