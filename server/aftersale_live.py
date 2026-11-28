@@ -28,6 +28,22 @@ REQUIRED_FIELDS = ("SKU", "易仓sku", "原文", "日期")
 
 START_MONTH = "2026-04"
 
+# Amazon 原因字段切换：原始事件月份 >= 该月时直接使用新字段，不再推断/翻译。
+REASON_FIELD_NAME = "内容要点-文本格式"
+REASON_FIELD_CUTOVER_MONTH = "2026-10"
+REASON_FIELD_UNKNOWN = "未注明"
+
+# 顶层分隔符：ASCII/中文逗号、顿号、ASCII/中文分号、换行、竖线。
+# 括号内的分隔符不切分。
+_REASON_SPLIT_RE = re.compile(r"[,，、;；\n\r|]")
+_REASON_OPEN_BRACKETS = "(（[【"
+_REASON_BRACKET_PAIRS = {
+    "(": ")",
+    "（": "）",
+    "[": "]",
+    "【": "】",
+}
+
 DEFAULT_MAPPING_PATH = Path(__file__).resolve().parent / "aftersale_sku_relation.csv"
 
 # 精确账号别名（仅这些标签可映射到规范账号）
@@ -157,6 +173,51 @@ def _parse_date_month(v):
     except ValueError:
         return None
     return "%04d-%02d" % (y, mo)
+
+
+def _split_reason_field(value):
+    """将新原因字段拆分为去重后的顶层标签列表。
+
+    仅在括号外的分隔符处切分；保留内部标点/括号/未知标签。
+    空白或仅分隔符返回 [未注明]。
+    """
+    if not isinstance(value, str):
+        return [REASON_FIELD_UNKNOWN]
+    s = value.strip()
+    if not s:
+        return [REASON_FIELD_UNKNOWN]
+    segments = []
+    buf = []
+    stack = []
+    for ch in s:
+        if ch in _REASON_OPEN_BRACKETS:
+            stack.append(_REASON_BRACKET_PAIRS[ch])
+            buf.append(ch)
+            continue
+        if stack and ch == stack[-1]:
+            stack.pop()
+            buf.append(ch)
+            continue
+        if not stack and _REASON_SPLIT_RE.match(ch):
+            segments.append("".join(buf))
+            buf = []
+            continue
+        buf.append(ch)
+    segments.append("".join(buf))
+
+    out = []
+    seen = set()
+    for seg in segments:
+        label = seg.strip()
+        if not label:
+            continue
+        if label in seen:
+            continue
+        seen.add(label)
+        out.append(label)
+    if not out:
+        return [REASON_FIELD_UNKNOWN]
+    return out
 
 
 def _prev_month(month: str):
@@ -293,6 +354,11 @@ def _empty_result(fetched_at, diagnostics):
             "connected": False,
             "items": None,
             "subcategory_items": None,
+            "field_items": None,
+            "field_record_count": None,
+            "legacy_record_count": None,
+            "cutover_month": REASON_FIELD_CUTOVER_MONTH,
+            "field_name": REASON_FIELD_NAME,
             "message": "售后原因数据暂不可用；未生成占比。",
         },
         "diagnostics": diagnostics,
@@ -350,7 +416,7 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         try:
             field_meta = fetch_fields(
                 token, app_token, table_id, http=http,
-                required_fields={name: 1 for name in REQUIRED_FIELDS + (shop_field,)},
+                required_fields={name: 1 for name in REQUIRED_FIELDS + (shop_field, REASON_FIELD_NAME)},
             )
         except BoardError:
             diagnostics.append(_diag("error", "source_failed",
@@ -373,6 +439,12 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         if shop_field not in field_names:
             diagnostics.append(_diag("error", "field_missing",
                                      "售后源表缺少店铺字段，售后实时数据未接入。"))
+            return _empty_result(fetched_at, diagnostics)
+        # 新原因字段为必需元数据：名称与类型必须为 Text(type 1)。
+        reason_meta = field_meta.get(REASON_FIELD_NAME)
+        if not isinstance(reason_meta, dict) or reason_meta.get("type") != 1:
+            diagnostics.append(_diag("error", "field_missing",
+                                     "售后源表缺少必需原因字段，售后实时数据未接入。"))
             return _empty_result(fetched_at, diagnostics)
 
         # 2b. 读取记录
@@ -417,9 +489,11 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
     # 4. 逐条处理
     num_by_store_month_sku = {}   # (account, month, sku) -> count
     num_by_store_sku = {}         # (account, sku) -> count
-    reason_by_store_sku = {}      # (account, sku, category) -> count
     reason_by_store_sku_month = {}  # (account, sku, month, category) -> count
     reason_detail_counter = {}      # (account, sku, month, category, subcategory) -> count
+    reason_field_counter = {}       # (account, sku, month, label) -> count
+    field_record_count = 0
+    legacy_record_count = 0
     max_month = None
 
     diag_counts = {
@@ -559,15 +633,21 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
         key_s = (account, matched_sku)
         num_by_store_sku[key_s] = num_by_store_sku.get(key_s, 0) + 1
 
-        raw_text_str = _text(raw_text)
-        category = _reason_category(raw_text_str) or "未注明原因"
-        subcategory = reason_subcategory(category, raw_text_str)
-        key_r = (account, matched_sku, category)
-        reason_by_store_sku[key_r] = reason_by_store_sku.get(key_r, 0) + 1
-        key_rm = (account, matched_sku, assigned_month, category)
-        reason_by_store_sku_month[key_rm] = reason_by_store_sku_month.get(key_rm, 0) + 1
-        key_sm_detail = (account, matched_sku, assigned_month, category, subcategory)
-        reason_detail_counter[key_sm_detail] = reason_detail_counter.get(key_sm_detail, 0) + 1
+        # 原因策略按原始事件月份分支，而非回退后的 assigned_month。
+        if event_month >= REASON_FIELD_CUTOVER_MONTH:
+            field_record_count += 1
+            for label in _split_reason_field(fields.get(REASON_FIELD_NAME)):
+                key_f = (account, matched_sku, assigned_month, label)
+                reason_field_counter[key_f] = reason_field_counter.get(key_f, 0) + 1
+        else:
+            legacy_record_count += 1
+            raw_text_str = _text(raw_text)
+            category = _reason_category(raw_text_str) or "未注明原因"
+            subcategory = reason_subcategory(category, raw_text_str)
+            key_rm = (account, matched_sku, assigned_month, category)
+            reason_by_store_sku_month[key_rm] = reason_by_store_sku_month.get(key_rm, 0) + 1
+            key_sm_detail = (account, matched_sku, assigned_month, category, subcategory)
+            reason_detail_counter[key_sm_detail] = reason_detail_counter.get(key_sm_detail, 0) + 1
 
         if max_month is None or assigned_month > max_month:
             max_month = assigned_month
@@ -681,6 +761,23 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
             "share": sub_share,
         })
 
+    # field_items: 新原因字段扁平标签；share 分母为同 account+sku+assignedmonth 的标签出现总数。
+    field_totals = {}
+    for (a, s, m, _label), cnt in reason_field_counter.items():
+        field_totals[(a, s, m)] = field_totals.get((a, s, m), 0) + cnt
+    field_items = []
+    for (account, sku, month, label), cnt in sorted(reason_field_counter.items()):
+        total = field_totals.get((account, sku, month), 0)
+        share = round(cnt * 100.0 / total, 4) if total > 0 else None
+        field_items.append({
+            "account": account,
+            "sku": sku,
+            "month": month,
+            "category": label,
+            "count": cnt,
+            "share": share,
+        })
+
     # summary
     total_n = sum(num_by_store_sku.values())
     total_d = sum(den_by_store_sku.values())
@@ -722,6 +819,11 @@ def build_aftersale_live(token, app_token, pair_map, sales_snapshot,
             "connected": True,
             "items": reasons_items,
             "subcategory_items": subcategory_items,
+            "field_items": field_items,
+            "field_record_count": field_record_count,
+            "legacy_record_count": legacy_record_count,
+            "cutover_month": REASON_FIELD_CUTOVER_MONTH,
+            "field_name": REASON_FIELD_NAME,
             "message": "原因占比按当前SKU、店铺和月份展示；只返回聚合类别和数量。",
         },
         "diagnostics": diagnostics,
@@ -757,7 +859,16 @@ def load(token, app_token, pair_map, sales_snapshot, http=None,
             "stores": [],
             "store_month": [],
             "sku_store_month": [],
-            "reasons": {"connected": False, "items": None, "subcategory_items": None},
+            "reasons": {
+                "connected": False,
+                "items": None,
+                "subcategory_items": None,
+                "field_items": None,
+                "field_record_count": None,
+                "legacy_record_count": None,
+                "cutover_month": REASON_FIELD_CUTOVER_MONTH,
+                "field_name": REASON_FIELD_NAME,
+            },
             "diagnostics": [{
                 "level": "error",
                 "code": "load_failed",

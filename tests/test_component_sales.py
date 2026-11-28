@@ -230,7 +230,7 @@ class ComponentAftersaleIntegrationTests(unittest.TestCase):
         rows = {al.AFTERSALE_TABLE_1: [{'record_id': 'synthetic-private-id', 'fields': {
             'SKU': 'SELLER', '易仓sku': '', '原文': 'private synthetic damage', '日期': '2026-05-20', '店铺名称': '行善'}}],
                 al.AFTERSALE_TABLE_2: []}
-        metadata = {name: {} for name in al.REQUIRED_FIELDS + (al.SHOP_FIELD_1, al.SHOP_FIELD_2)}
+        metadata = {name: {'type': 1} for name in al.REQUIRED_FIELDS + (al.SHOP_FIELD_1, al.SHOP_FIELD_2, al.REASON_FIELD_NAME)}
         with tempfile.TemporaryDirectory() as folder:
             mapping = Path(folder) / 'relation.csv'
             mapping.write_text('seller_sku,account,warehouse_sku,qty\nSELLER,所有账户,' + P + ',1\n', encoding='utf-8')
@@ -302,7 +302,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v8_g02_complete_packages')
+        self.assertEqual(key[-1], 'v9_amazon_reason_field')
         v4_key = key[:-1] + ('v4_component_min',)
         v4 = copy.deepcopy(entry)
         v4['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
@@ -318,7 +318,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v8_g02_complete_packages')
+        self.assertEqual(key[-1], 'v9_amazon_reason_field')
         v5_key = key[:-1] + ('v5_component_required_subset',)
         v5 = copy.deepcopy(entry)
         v5['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
@@ -334,7 +334,7 @@ class ComponentCacheTests(unittest.TestCase):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v8_g02_complete_packages')
+        self.assertEqual(key[-1], 'v9_amazon_reason_field')
         for old_version in ('v4_component_min', 'v5_component_required_subset'):
             old_key = key[:-1] + (old_version,)
             old = copy.deepcopy(entry)

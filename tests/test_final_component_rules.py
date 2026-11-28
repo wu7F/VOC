@@ -228,7 +228,7 @@ class Aftersale8018ExclusionTests(unittest.TestCase):
             fields['易仓sku'] = 'LAYJMZP8018CR-2L'
         rows = {al.AFTERSALE_TABLE_1: [{'record_id': 'r1', 'fields': fields}],
                 al.AFTERSALE_TABLE_2: []}
-        meta = {n: {} for n in al.REQUIRED_FIELDS + (al.SHOP_FIELD_1, al.SHOP_FIELD_2)}
+        meta = {n: {'type': 1} for n in al.REQUIRED_FIELDS + (al.SHOP_FIELD_1, al.SHOP_FIELD_2, al.REASON_FIELD_NAME)}
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'm.csv'
             path.write_text(mapping_text, encoding='utf-8')
@@ -269,7 +269,7 @@ class AliasAndCacheTests(unittest.TestCase):
             self.assertEqual(cs.COMPONENT_ALIASES[k], v)
 
     def test_v6_cache_cannot_serve_v7(self):
-        self.assertEqual(bb.CACHE_VERSION, 'v8_g02_complete_packages')
+        self.assertEqual(bb.CACHE_VERSION, 'v9_amazon_reason_field')
         self.assertNotEqual(bb.CACHE_VERSION, 'v6_component_required_202641')
 
     def test_old_v6_cache_entry_is_not_served_as_fresh(self):
@@ -278,7 +278,7 @@ class AliasAndCacheTests(unittest.TestCase):
         cache = {}
         helper.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v8_g02_complete_packages')
+        self.assertEqual(key[-1], 'v9_amazon_reason_field')
         old_key = key[:-1] + ('v6_component_required_202641',)
         old = copy.deepcopy(entry)
         old['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456

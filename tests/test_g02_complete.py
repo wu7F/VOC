@@ -245,7 +245,7 @@ class G02AftersaleIntegrationTests(unittest.TestCase):
             table1.append({'record_id': 'r2', 'fields': extra_record})
         rows = {al.AFTERSALE_TABLE_1: table1,
                 al.AFTERSALE_TABLE_2: []}
-        meta = {n: {} for n in al.REQUIRED_FIELDS + (al.SHOP_FIELD_1, al.SHOP_FIELD_2)}
+        meta = {n: {'type': 1} for n in al.REQUIRED_FIELDS + (al.SHOP_FIELD_1, al.SHOP_FIELD_2, al.REASON_FIELD_NAME)}
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'm.csv'
             path.write_text(mapping_text, encoding='utf-8')
@@ -334,15 +334,15 @@ class G02CacheVersionTests(unittest.TestCase):
              patch.object(al, 'load', return_value=aftersale):
             return bb.get_board('synthetic-app', 'synthetic-secret', refresh=True, now_fn=lambda: now, cache=cache)
 
-    def test_cache_version_is_v8(self):
-        self.assertEqual(bb.CACHE_VERSION, 'v8_g02_complete_packages')
+    def test_cache_version_is_v9(self):
+        self.assertEqual(bb.CACHE_VERSION, 'v9_amazon_reason_field')
 
-    def test_old_v7_cache_rejected_under_aftersale_failure(self):
+    def test_old_v8_cache_rejected_under_aftersale_failure(self):
         cache = {}
         first = self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        self.assertEqual(key[-1], 'v8_g02_complete_packages')
-        old_key = key[:-1] + ('v7_8018_excluded_0458_packages',)
+        self.assertEqual(key[-1], 'v9_amazon_reason_field')
+        old_key = key[:-1] + ('v8_g02_complete_packages',)
         old = copy.deepcopy(entry)
         old['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
         cache.clear()
@@ -352,11 +352,11 @@ class G02CacheVersionTests(unittest.TestCase):
         self.assertFalse(fresh['aftersale']['connected'])
         self.assertNotEqual(fresh['teams'], first['teams'])
 
-    def test_old_v7_cache_rejected_under_sales_failure(self):
+    def test_old_v8_cache_rejected_under_sales_failure(self):
         cache = {}
         self.refresh(cache, (10, 8), True)
         key, entry = next(iter(cache.items()))
-        old_key = key[:-1] + ('v7_8018_excluded_0458_packages',)
+        old_key = key[:-1] + ('v8_g02_complete_packages',)
         old = copy.deepcopy(entry)
         old['snapshot']['teams'][0]['shops'][0]['units_known'] = 123456
         cache.clear()

@@ -85,7 +85,7 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 30.0
 
-CACHE_VERSION = "v8_g02_complete_packages"
+CACHE_VERSION = "v9_amazon_reason_field"
 
 # 本地确认快照（只读，非实时）。缺失文件时售后保持未接入。
 AFTERSALE_SNAPSHOT_PATH = Path(__file__).resolve().parent / "aftersale_snapshot.json"

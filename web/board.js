@@ -396,8 +396,10 @@
     }
     var primary = Object.create(null);
     var secondary = Object.create(null);
+    var fieldPrimary = Object.create(null);
     var items = Array.isArray(snapshot.aftersale.reasons.items) ? snapshot.aftersale.reasons.items : [];
     var subcategoryItems = Array.isArray(snapshot.aftersale.reasons.subcategory_items) ? snapshot.aftersale.reasons.subcategory_items : [];
+    var fieldItems = (!wayfair && Array.isArray(snapshot.aftersale.reasons.field_items)) ? snapshot.aftersale.reasons.field_items : [];
     items.forEach(function (r) {
       if (!r || !teamAccounts[r.account] || String(r.sku) !== String(sku) || String(r.month) !== String(month)) return;
       if (!r.category || typeof r.count !== 'number' || !isFinite(r.count) || r.count <= 0) return;
@@ -408,6 +410,11 @@
       if (!r.category || !r.subcategory || typeof r.count !== 'number' || !isFinite(r.count) || r.count <= 0) return;
       var k = JSON.stringify([r.category, r.subcategory]);
       secondary[k] = (secondary[k] || 0) + r.count;
+    });
+    fieldItems.forEach(function (r) {
+      if (!r || !teamAccounts[r.account] || String(r.sku) !== String(sku) || String(r.month) !== String(month)) return;
+      if (!r.category || typeof r.count !== 'number' || !isFinite(r.count) || r.count <= 0) return;
+      fieldPrimary[r.category] = (fieldPrimary[r.category] || 0) + r.count;
     });
     var total = 0;
     Object.keys(primary).forEach(function (category) {
@@ -431,7 +438,19 @@
       if (a.category !== b.category) return a.category.localeCompare(b.category);
       return b.share - a.share;
     });
-    return { connected: true, items: primaryOut, subcategory_items: secondaryOut };
+    var fieldTotal = 0;
+    Object.keys(fieldPrimary).forEach(function (category) {
+      var count = fieldPrimary[category];
+      if (typeof count === 'number' && isFinite(count) && count > 0) fieldTotal += count;
+    });
+    var fieldOut = Object.keys(fieldPrimary).map(function (category) {
+      var count = fieldPrimary[category];
+      var share = fieldTotal > 0 ? count / fieldTotal * 100 : 0;
+      return { category: category, count: count, share: share };
+    }).sort(function (a, b) { return b.share - a.share; });
+    var out = { connected: true, items: primaryOut, subcategory_items: secondaryOut };
+    if (!wayfair && Array.isArray(snapshot.aftersale.reasons.field_items)) out.field_items = fieldOut;
+    return out;
   }
 
   function renderProductReasonTooltipHtml(snapshot, sku, month) {
@@ -450,7 +469,9 @@
     });
     var h = '<div class="product-tip-content"><b>' + esc(displayName) + '</b><br>' +
       esc(month) + ' · 售后率 ' + fmtRate(rateVal) + '<br>';
-    if (!aggregated.connected || !aggregated.items.length) {
+    var isNewContract = snapshotPlatform(snapshot) !== 'Wayfair' && Array.isArray(aggregated.field_items);
+    var fieldItems = isNewContract ? aggregated.field_items : [];
+    if (!aggregated.connected || (!aggregated.items.length && !fieldItems.length)) {
       h += '<span class="nac">—</span>';
       if (!aggregated.connected && snapshot && snapshot.aftersale && snapshot.aftersale.reasons) {
         h += '<div class="tip-note">' + esc(snapshot.aftersale.reasons.message || '售后原因未接入') + '</div>';
@@ -459,21 +480,39 @@
       return h;
     }
     h += '<div class="tip-reasons">';
-    aggregated.items.forEach(function (r) {
-      h += '<div>' + esc(r.category) + '：' + fmtRate(r.share) + '</div>';
-      var children = aggregated.subcategory_items.filter(function (c) {
-        return c.category === r.category;
-      });
-      if (children.length) {
-        h += '<details class="tip-child"><summary>二级原因（占该一级类别）</summary><div class="tip-child-list">';
-        children.forEach(function (c) {
-          h += '<div>' + esc(c.subcategory) + '：' + fmtRate(c.share) + '（' + fmtUnits(c.count) + ' 条）</div>';
+    if (isNewContract && !aggregated.items.length) {
+      h += '<div class="tip-section-label">原始售后日期：2026年10月前</div>';
+      h += '<div class="nac">—</div>';
+    }
+    if (aggregated.items.length) {
+      if (isNewContract) h += '<div class="tip-section-label">原始售后日期：2026年10月前</div>';
+      aggregated.items.forEach(function (r) {
+        h += '<div>' + esc(r.category) + '：' + fmtRate(r.share) + '</div>';
+        var children = aggregated.subcategory_items.filter(function (c) {
+          return c.category === r.category;
         });
-        h += '</div></details>';
-      } else {
-        h += '<div class="tip-child nac">二级原因未接入</div>';
-      }
-    });
+        if (children.length) {
+          h += '<details class="tip-child"><summary>二级原因（占该一级类别）</summary><div class="tip-child-list">';
+          children.forEach(function (c) {
+            h += '<div>' + esc(c.subcategory) + '：' + fmtRate(c.share) + '（' + fmtUnits(c.count) + ' 条）</div>';
+          });
+          h += '</div></details>';
+        } else {
+          h += '<div class="tip-child nac">二级原因未接入</div>';
+        }
+      });
+    }
+    if (isNewContract && !fieldItems.length && aggregated.items.length) {
+      h += '<div class="tip-section-label">原始售后日期：2026年10月起</div>';
+      h += '<div class="nac">—</div>';
+    }
+    if (isNewContract && fieldItems.length) {
+      h += '<div class="tip-section-label">原始售后日期：2026年10月起</div>';
+      fieldItems.forEach(function (r) {
+        h += '<div>' + esc(r.category) + '：' + fmtRate(r.share) + '（' + fmtUnits(r.count) + ' 条）</div>';
+      });
+      h += '<div class="tip-note">占比按原因次数计算；售后分子仍每条记录计1。</div>';
+    }
     h += '</div><button type="button" class="tip-close" aria-label="关闭">×</button></div>';
     return h;
   }
@@ -801,6 +840,8 @@
       var reasonsMsg = (aftersale.reasons && aftersale.reasons.message) || aftersale.message ||
         '一级和二级均来自售后原因字段的已批准归并';
       h += '<h3>售后原因占比</h3><p>' + esc(reasonsMsg) + '</p>';
+    } else if (aftersale.connected && aftersale.reasons && aftersale.reasons.connected && Array.isArray(aftersale.reasons.field_items)) {
+      h += '<h3>售后原因占比</h3><p>按原始售后日期分两段展示：2026年10月前与2026年10月起。两段均可在 SKU 明细与产品提示中查看；同一条记录可能包含多个原因，按原因次数分别计数。</p>';
     } else {
       h += '<h3>售后原因占比</h3><div class="warnbox">已发现售后表“原文”字段，但当前只读访问拿不到记录字段值；暂不生成占比，避免把缺失数据当作没有原因。</div>';
     }
@@ -903,6 +944,10 @@
     var parentItems = (reasons && Array.isArray(reasons.items) ? reasons.items : []).filter(function (r) {
       return r && r.account === account && r.sku === sku && r.month === month;
     });
+    var isNewContract = snapshotPlatform(snapshot) !== 'Wayfair' && !!(reasons && Array.isArray(reasons.field_items));
+    var fieldItems = isNewContract ? reasons.field_items.filter(function (r) {
+      return r && r.account === account && r.sku === sku && r.month === month;
+    }) : [];
 
     return renderReasonSectionHtml({
       snapshot: snapshot,
@@ -912,7 +957,8 @@
       reasons: reasons,
       connected: connected,
       parentItems: parentItems,
-      subcategoryItems: subcategoryItems
+      subcategoryItems: subcategoryItems,
+      fieldItems: fieldItems
     });
   }
 
@@ -922,6 +968,8 @@
     var reasons = ctx.reasons;
     var parentItems = ctx.parentItems || [];
     var subcategoryItems = ctx.subcategoryItems || [];
+    var isNewContract = !!(ctx.snapshot && snapshotPlatform(ctx.snapshot) !== 'Wayfair' && reasons && Array.isArray(reasons.field_items));
+    var fieldItems = isNewContract ? (ctx.fieldItems || []) : [];
 
     var message = (reasons && reasons.message) || (ctx.snapshot && ctx.snapshot.aftersale && ctx.snapshot.aftersale.message) ||
       '售后原因数据暂不可用；未生成占比。';
@@ -931,47 +979,71 @@
         '<div class="warnbox">' + esc(message) + '</div>';
     }
 
-    if (!parentItems.length) {
+    if (!parentItems.length && !fieldItems.length) {
+      if (isNewContract) {
+        return '<div class="reason-field-layout"><h4>原始售后日期：2026年10月前</h4><p class="nac">—</p>' +
+          '<h4>原始售后日期：2026年10月起</h4><p class="nac">—</p></div>';
+      }
       return '<p class="nac">— 该店铺、SKU、月份没有可归因的售后记录；这不代表缺失记录被按 0 处理。</p>';
     }
 
-    var h = '<div class="reason-layout">';
-    h += renderReasonPieAndPrimaryTableHtml(parentItems, '售后原因占比');
-    h += '<div class="reason-secondary">';
-    h += '<h4>二级原因明细</h4>';
-    if (ctx.snapshot && snapshotPlatform(ctx.snapshot) === 'Wayfair') {
-      h += '<p>一级和二级均来自售后原因字段的已批准归并。二级占比为占该一级类别的百分比。</p>';
-    } else {
-      h += '<p>二级原因按关键词归类；未命中不猜测。二级占比为占该一级类别的百分比。</p>';
+    var h = '';
+    if (isNewContract) {
+      h += '<h4>原始售后日期：2026年10月前</h4>';
     }
-    h += '<div class="reason-secondary-list">';
-    h += parentItems.map(function (parent) {
-      var children = subcategoryItems.filter(function (child) {
-        return child && child.account === account && child.sku === sku && child.month === month &&
-          child.category === parent.category;
-      });
-      var title = '<h5>' + esc(parent.category) + '（' + fmtUnits(parent.count) + ' 条 · ' + fmtRate(parent.share) + '）</h5>';
-      if (!children.length) {
-        return '<details class="reason-child"><summary>' + title + '</summary>' +
-          '<p class="nac">二级原因未接入</p>' +
-          '</details>';
+    if (parentItems.length) {
+      h += '<div class="reason-layout">';
+      h += renderReasonPieAndPrimaryTableHtml(parentItems, '售后原因占比');
+      h += '<div class="reason-secondary">';
+      h += '<h4>二级原因明细</h4>';
+      if (ctx.snapshot && snapshotPlatform(ctx.snapshot) === 'Wayfair') {
+        h += '<p>一级和二级均来自售后原因字段的已批准归并。二级占比为占该一级类别的百分比。</p>';
+      } else {
+        h += '<p>二级原因按关键词归类；未命中不猜测。二级占比为占该一级类别的百分比。</p>';
       }
-      return '<details class="reason-child"><summary>' + title + '</summary>' +
-        '<div class="reason-child-table-wrap"><table class="reason-table reason-child-table">' +
-        '<thead><tr><th>二级类别</th><th>数量</th><th>占一级类别</th></tr></thead><tbody>' +
-        children.map(function (child) {
-          var childShareText = (child.share !== null && child.share !== undefined && isFinite(Number(child.share)))
-            ? fmtRate(child.share)
-            : '—';
-          return '<tr><td>' + esc(child.subcategory) + '</td><td>' + fmtUnits(child.count) + '</td><td>' + childShareText + '</td></tr>';
-        }).join('') +
-        '</tbody></table></div></details>';
-    }).join('');
-    h += '</div></div></div>';
+      h += '<div class="reason-secondary-list">';
+      h += parentItems.map(function (parent) {
+        var children = subcategoryItems.filter(function (child) {
+          return child && child.account === account && child.sku === sku && child.month === month &&
+            child.category === parent.category;
+        });
+        var title = '<h5>' + esc(parent.category) + '（' + fmtUnits(parent.count) + ' 条 · ' + fmtRate(parent.share) + '）</h5>';
+        if (!children.length) {
+          return '<details class="reason-child"><summary>' + title + '</summary>' +
+            '<p class="nac">二级原因未接入</p>' +
+            '</details>';
+        }
+        return '<details class="reason-child"><summary>' + title + '</summary>' +
+          '<div class="reason-child-table-wrap"><table class="reason-table reason-child-table">' +
+          '<thead><tr><th>二级类别</th><th>数量</th><th>占一级类别</th></tr></thead><tbody>' +
+          children.map(function (child) {
+            var childShareText = (child.share !== null && child.share !== undefined && isFinite(Number(child.share)))
+              ? fmtRate(child.share)
+              : '—';
+            return '<tr><td>' + esc(child.subcategory) + '</td><td>' + fmtUnits(child.count) + '</td><td>' + childShareText + '</td></tr>';
+          }).join('') +
+          '</tbody></table></div></details>';
+      }).join('');
+      h += '</div></div></div>';
+    } else if (isNewContract) {
+      h += '<p class="nac">—</p>';
+    }
+    if (isNewContract) {
+      h += '<div class="reason-field-layout">';
+      h += '<h4>原始售后日期：2026年10月起</h4>';
+      if (fieldItems.length) {
+        h += renderReasonPieAndPrimaryTableHtml(fieldItems, '内容要点原因占比', '原因');
+        h += '<p class="tip-note">多个原因各计1次；占比按原因次数计算，售后分子仍每条记录计1。</p>';
+      } else {
+        h += '<p class="nac">—</p>';
+      }
+      h += '</div>';
+    }
     return h;
   }
 
-  function renderReasonPieAndPrimaryTableHtml(allItems, label) {
+  function renderReasonPieAndPrimaryTableHtml(allItems, label, categoryHeader) {
+    var headerText = categoryHeader || '一级类别';
     var retained = [];
     var originalIndexes = [];
     (allItems || []).forEach(function (r, i) {
@@ -1024,7 +1096,7 @@
       svg = '<div class="reason-pie-empty">—</div>';
     }
 
-    var table = '<table class="reason-table reason-primary-table"><thead><tr><th>一级类别</th><th>数量</th><th>占售后原因</th></tr></thead><tbody>';
+    var table = '<table class="reason-table reason-primary-table"><thead><tr><th>' + esc(headerText) + '</th><th>数量</th><th>占售后原因</th></tr></thead><tbody>';
     (allItems || []).forEach(function (r, i) {
       if (!r || !r.category) return;
       table += '<tr><td><span class="dot" style="background:' + esc(color(i)) + '"></span>' + esc(r.category) + '</td>' +
@@ -1190,6 +1262,9 @@
     var reasonItems = reasons && Array.isArray(reasons.items) ? reasons.items.filter(function (r) {
       return r && r.account === shop.account && r.sku === sku.sku && r.month === month;
     }) : [];
+    var reasonFieldItems = reasons && Array.isArray(reasons.field_items) ? reasons.field_items.filter(function (r) {
+      return r && r.account === shop.account && r.sku === sku.sku && r.month === month;
+    }) : [];
     var reasonsConnected = !!(aftersaleConnected && reasons && reasons.connected);
     h += '<p>' + esc(shop.account) + ' · ' + esc(month) + ' · 当前SKU 的售后原因占比；仅显示服务端汇总类别，不显示原文。</p>';
     h += renderReasonSectionHtml({
@@ -1201,6 +1276,7 @@
       connected: reasonsConnected,
       parentItems: reasonItems,
       subcategoryItems: (reasons && Array.isArray(reasons.subcategory_items)) ? reasons.subcategory_items : [],
+      fieldItems: reasonFieldItems,
       scopeLabel: shop.account + ' · ' + month + ' · 当前SKU'
     });
     h += '</div>';
