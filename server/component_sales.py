@@ -15,6 +15,7 @@ from . import shop_filter
 # Authoritative fixed mapping. Do not infer from suffixes or descriptions.
 COMPONENT_ALIASES: dict[str, str] = {
     "LAYJMZPG02CR-2R": "LAYJMZPG02CR-2L",
+    "LAYJMZPG02DG-2R": "LAYJMZPG02DG-2L",
     "LAYJMZPG01LG-2R": "LAYJMZPG01LG-2L",
     "LAYJMZPG02CR-3R": "LAYJMZPG02CR-3L",
     "LAYJMZPG02CR-3M": "LAYJMZPG02CR-3L",
@@ -73,7 +74,18 @@ REQUIRED_COMPONENTS: dict[str, tuple[str, ...]] = {
     "LAYJMZP0458LG-3MT": ("LAYJMZP0458LG-3MT", "LAYJMZP0458LG-3LT", "LAYJMZP0458LG-3RT", "LAYJMZP0458LG-3KB"),
     "LAYJHLR8005DG-LT": ("LAYJHLR8005DG-LT", "LAYJHLR8005DG-ME1", "LAYJHLR8005DG-ZJKB", "LAYJHLR8005DG-ZJDZ", "LAYJHLR8005DG-ME2", "LAYJHLR8005DG-RT", "LAYJHLR8005DG-CJ"),
     "LAYJMZP202641DBR-2LT": ("LAYJMZP202641DBR-2LT", "LAYJMZP202641DBR-2RT", "LAYJMZP202641DBR-AR"),
+    "LAYJMZPG02CR-2L": ("LAYJMZPG02CR-2L", "LAYJMZPG02CR-2R"),
+    "LAYJMZPG02DG-2L": ("LAYJMZPG02DG-2L", "LAYJMZPG02DG-2R"),
 }
+
+
+# Strict two-box G02 targets: only the original L/R parts may contribute.
+# Any other original SKU that aliases to these targets (e.g. 2RIGHT, DG 2LT/2MT/2RT)
+# is skipped before group creation and never rescues, lowers or poisons the group.
+STRICT_TWO_BOX_TARGETS: frozenset[str] = frozenset({
+    "LAYJMZPG02CR-2L",
+    "LAYJMZPG02DG-2L",
+})
 
 
 # Two independently complete packages for LAYJMZP240458LG-2L.
@@ -214,6 +226,13 @@ def merge_component_rows(rows: list[dict], pair_map: dict | None, diagnostics: l
         else:
             unrelated.append(dict(r))
             continue
+
+        if canonical in STRICT_TWO_BOX_TARGETS:
+            required = REQUIRED_COMPONENTS.get(canonical)
+            if required is not None and sku not in required:
+                # Non-required original SKU for a strict two-box target: skip it.
+                # It stays pending for other package ownership; never reassigned.
+                continue
 
         key = (shop_filter.norm(r.get("account") or ""), canonical, r.get("month"))
         by_orig = groups.setdefault(key, {})

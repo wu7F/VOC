@@ -110,6 +110,62 @@ class G02IgnoredComponentTests(unittest.TestCase):
         self.assertEqual(sold(full, t), 3)
 
 
+class G02TwoBoxStrictTests(unittest.TestCase):
+    CR_L = 'LAYJMZPG02CR-2L'
+    CR_R = 'LAYJMZPG02CR-2R'
+    DG_L = 'LAYJMZPG02DG-2L'
+    DG_R = 'LAYJMZPG02DG-2R'
+
+    def pm(self):
+        return {self.CR_L: {'display_name': 'CR', 'wf_part_number': 'WCR'},
+                self.DG_L: {'display_name': 'DG', 'wf_part_number': 'WDG'}}
+
+    def test_complete_each_color_independent_and_never_cross_fill(self):
+        cr = build([row(self.CR_L, 10), row(self.CR_R, 8)], pair_map=self.pm())
+        self.assertEqual(sold(cr, self.CR_L), 8)
+        self.assertNotIn(self.DG_L, {x['sku'] for x in shop(cr)['skus']})
+        dg = build([row(self.DG_L, 7), row(self.DG_R, 6)], pair_map=self.pm())
+        self.assertEqual(sold(dg, self.DG_L), 6)
+        self.assertNotIn(self.CR_L, {x['sku'] for x in shop(dg)['skus']})
+        both = build([row(self.CR_L, 10), row(self.CR_R, 8),
+                      row(self.DG_L, 7), row(self.DG_R, 6)], pair_map=self.pm())
+        self.assertEqual(sold(both, self.CR_L), 8)
+        self.assertEqual(sold(both, self.DG_L), 6)
+
+    def test_cross_color_parts_cannot_complete_either(self):
+        s = build([row(self.CR_L, 10), row(self.DG_R, 8)], pair_map=self.pm())
+        self.assertEqual(sold(s, self.CR_L), 0)
+        self.assertEqual(sold(s, self.DG_L), 0)
+
+    def test_foreign_aliases_do_not_rescue_or_create(self):
+        with self.subTest('CR L + ignored 2RIGHT'):
+            s = build([row(self.CR_L, 10), row('LAYJMZPG02CR-2RIGHT', 0)], pair_map=self.pm())
+            self.assertEqual(sold(s, self.CR_L), 0)
+        with self.subTest('CR L/R + ignored 2RIGHT duplicate'):
+            s = build([row(self.CR_L, 10), row(self.CR_R, 8),
+                       row('LAYJMZPG02CR-2RIGHT', 0)], pair_map=self.pm())
+            self.assertEqual(sold(s, self.CR_L), 8)
+        with self.subTest('DG only foreign LT/MT/RT no target row'):
+            s = build([row('LAYJMZPG02DG-2LT', 5), row('LAYJMZPG02DG-2MT', 5),
+                       row('LAYJMZPG02DG-2RT', 5)], pair_map=self.pm())
+            self.assertNotIn(self.DG_L, {x['sku'] for x in shop(s)['skus']})
+        with self.subTest('DG full pair unaffected by foreign invalid'):
+            s = build([row(self.DG_L, 7), row(self.DG_R, 6),
+                       row('LAYJMZPG02DG-2LT', None)], pair_map=self.pm())
+            self.assertEqual(sold(s, self.DG_L), 6)
+
+    def test_duplicate_required_row_is_unknown(self):
+        s = build([row(self.CR_L, 10), row(self.CR_R, 8), row(self.CR_R, 8)], pair_map=self.pm())
+        self.assertIsNone(sold(s, self.CR_L))
+        self.assertTrue(any(d['code'] == 'duplicate_key' for d in s['diagnostics']))
+
+    def test_each_color_all_absent_creates_no_target(self):
+        s = build([row('PLAIN', 4)], pair_map=dict(self.pm(), PLAIN=pair('PLAIN')['PLAIN']))
+        skus = {x['sku'] for x in shop(s)['skus']}
+        self.assertNotIn(self.CR_L, skus)
+        self.assertNotIn(self.DG_L, skus)
+
+
 class TwoSeat0458Tests(unittest.TestCase):
     T = 'LAYJMZP240458LG-2L'
     OLD_R = 'LAYJMZP240458LG-2R'

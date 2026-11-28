@@ -101,11 +101,11 @@ class ComponentSalesTests(unittest.TestCase):
         self.assertIn('PLAIN', skus)
         self.assertIsNone(shop(s)['months']['2026-05'])
 
-    def test_pending_g02_group_retains_observed_only_minimum(self):
+    def test_g02_two_box_required_component_missing_yields_zero(self):
         g02 = 'LAYJMZPG02CR-2L'
         pair = {g02: {'display_name': 'G02', 'wf_part_number': 'WG'}}
         s = build([row('LAYJMZPG02CR-2R', 5)], pair_map=pair)
-        self.assertEqual(sold(s, g02), 5)
+        self.assertEqual(sold(s, g02), 0)
 
     def test_observed_alias_overrides_canonical_confirmed_zero_backfill(self):
         s = build([row(R, 5)], confirmed_zero_skus={P})
